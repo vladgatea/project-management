@@ -150,6 +150,7 @@
   .sablon-add-row{ display:flex; gap:6px; margin-top:10px; }
   .sablon-add-row input{ flex:2; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:12.5px; }
   .sablon-add-row select{ flex:1; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:12.5px; }
+  .sablon-save-row{ display:flex; align-items:center; justify-content:space-between; gap:10px; background:var(--gold-soft); border-radius:8px; padding:8px 10px; margin-top:8px; }
 
   /* ---------- modal ---------- */
   .overlay{ position:fixed; inset:0; background:rgba(20,26,24,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; }
@@ -480,6 +481,7 @@ function saveWhoami(v){ localStorage.setItem('mp_whoami', v); }
 /* ---------------- modals ---------------- */
 
 function openModal(type, subId){
+  closeModal(); // inchide orice modal ramas deschis, ca sa nu se stivuiasca doua ferestre cu aceleasi ID-uri
   const wrap = document.createElement('div');
   wrap.className = 'overlay';
   wrap.id = 'overlay';
@@ -713,10 +715,14 @@ function modalSabloaneManager(){
           <button class="btn btn-ghost btn-sm" style="color:var(--late);" onclick="submitDeleteSablon('${sb.ID}')">Șterge șablon</button>
         </div>
         <div class="sablon-rows" id="rows_${sb.ID}">${rows}</div>
+        <div class="sablon-save-row" id="saveRow_${sb.ID}" style="display:none;">
+          <span style="font-size:11.5px;color:var(--ink-soft);">Ordinea s-a schimbat.</span>
+          <button class="btn btn-gold btn-sm" onclick="saveSablonOrder('${sb.ID}')">💾 Salvează ordinea</button>
+        </div>
         <div class="sablon-add-row">
           <input id="new_step_${sb.ID}" placeholder="Nume pas nou">
           <select id="new_dep_${sb.ID}">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
-          <button class="btn btn-gold btn-sm" onclick="submitAddSablonTask('${sb.ID}')">+ Pas</button>
+          <button class="btn btn-gold btn-sm" id="btnAddStep_${sb.ID}" onclick="submitAddSablonTask('${sb.ID}')">+ Pas</button>
         </div>
       </div>`;
   }).join('') || `<p class="no-tasks">Niciun șablon încă. Creează primul mai jos.</p>`;
@@ -724,11 +730,11 @@ function modalSabloaneManager(){
   return `
     <div class="modal" style="max-width:560px;">
       <h3 class="display">Șabloane de task-uri</h3>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 16px;">Definește o singură dată pașii standard (ex: pentru un produs nou), apoi aplică-i pe orice subproiect cu un click. Trage de ⠿ ca să schimbi ordinea.</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 16px;">Definește o singură dată pașii standard (ex: pentru un produs nou), apoi aplică-i pe orice subproiect cu un click. Trage de ⠿ ca să schimbi ordinea, apoi apasă „Salvează ordinea”.</p>
       ${cards}
       <div class="field-row" style="margin-top:6px;align-items:flex-end;">
         <div class="field" style="margin-bottom:0;"><label>Șablon nou</label><input id="f_sablon_nume" placeholder="ex: Produs nou"></div>
-        <button class="btn btn-primary btn-sm" onclick="submitAddSablon()">Creează</button>
+        <button class="btn btn-primary btn-sm" id="btnCreateSablon" onclick="submitAddSablon()">Creează</button>
       </div>
       <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div>
     </div>`;
@@ -756,18 +762,27 @@ function handleDragOver(e){
   row.parentNode.insertBefore(dragged, before ? row : row.nextSibling);
 }
 
-async function handleDragEnd(e){
+function handleDragEnd(e){
   e.currentTarget.classList.remove('dragging');
   const sablonId = dragState.sablonId;
   dragState = { draggedId:null, sablonId:null };
   if(!sablonId) return;
+  // nu salvam automat — doar aratam butonul de salvare, ca utilizatorul sa confirme ordinea
+  const saveRow = document.getElementById('saveRow_'+sablonId);
+  if(saveRow) saveRow.style.display = 'flex';
+}
+
+async function saveSablonOrder(sablonId){
   const container = document.getElementById('rows_'+sablonId);
+  const btn = document.querySelector('#saveRow_'+sablonId+' button');
   if(!container) return;
   const ids = Array.from(container.children).map(el => el.dataset.id).filter(Boolean);
+  if(btn){ btn.disabled = true; btn.textContent = 'Se salvează…'; }
   try{
     for(let i = 0; i < ids.length; i++){
       await apiPost('updateSablonTask', { ID: ids[i], Ordine: i + 1 });
     }
+    showToast('Ordine salvată');
     await loadAll(true);
     openModal('sabloaneManager');
   }catch(err){ showToast('Eroare la reordonare: ' + err.message); }
@@ -776,12 +791,15 @@ async function handleDragEnd(e){
 async function submitAddSablon(){
   const nume = document.getElementById('f_sablon_nume').value.trim();
   if(!nume){ showToast('Numele șablonului e obligatoriu'); return; }
+  const btn = document.getElementById('btnCreateSablon');
+  if(btn.disabled) return; // previne dublu-click / dublu-submit
+  btn.disabled = true;
   try{
     await apiPost('addSablon', { Nume: nume });
     showToast('Șablon creat');
     await loadAll(true);
     openModal('sabloaneManager');
-  }catch(err){ showToast('Eroare: ' + err.message); }
+  }catch(err){ showToast('Eroare: ' + err.message); btn.disabled = false; }
 }
 
 async function submitAddSablonTask(sablonId){
@@ -790,11 +808,14 @@ async function submitAddSablonTask(sablonId){
   if(!nume){ showToast('Numele pasului e obligatoriu'); return; }
   const dep = document.getElementById('new_dep_'+sablonId).value;
   const ordine = sablonItems(sablonId).length + 1;
+  const btn = document.getElementById('btnAddStep_'+sablonId);
+  if(btn.disabled) return; // previne dublu-click / dublu-submit
+  btn.disabled = true;
   try{
     await apiPost('addSablonTask', { SablonID: sablonId, Nume: nume, Departament: dep, Ordine: ordine });
     await loadAll(true);
     openModal('sabloaneManager');
-  }catch(err){ showToast('Eroare: ' + err.message); }
+  }catch(err){ showToast('Eroare: ' + err.message); btn.disabled = false; }
 }
 
 async function submitDeleteSablonTask(id){
