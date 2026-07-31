@@ -223,7 +223,7 @@
    ========================================================= */
 const SCRIPT_URL_DEFAULT = "https://script.google.com/macros/s/AKfycbzJwD6nXpx-xdrWvohqOtWwlFIfYrKflu1kjUFCcdz_Z2rxk0Ygt9IraomVuRIyrDntEQ/exec";
 
-const DEPARTAMENTE = ["Productie","Vanzari","Marketing","Achizitii","Logistica","Management","Calitate","Altul"];
+const DEPARTAMENTE = ["Productie","Vanzari","Marketing","Achizitii","Logistica","Management","Financiar","GM","Calitate","Altul"];
 const TASK_STATUSES = ["De facut","In lucru","Finalizat","Blocat"];
 const SUBPROJ_STATUSES = ["Planificat","In derulare","Finalizat","Intarziat"];
 
@@ -235,7 +235,7 @@ const STATUS_COLOR = {
   "Finalizat":"var(--gold)"
 };
 
-let STATE = { proiecte:[], subproiecte:[], taskuri:[], sabloane:[], sabloaneTaskuri:[] };
+let STATE = { proiecte:[], subproiecte:[], taskuri:[], sabloane:[], sabloaneTaskuri:[], responsabili:[] };
 let selectedProjectId = null;
 let ACTION_BUSY = false;
 
@@ -313,6 +313,76 @@ function toDateInput(d){
   if(!d) return '';
   const m = String(d).match(/^\d{4}-\d{2}-\d{2}/);
   return m ? m[0] : '';
+}
+
+function responsabilOptions(selectedNume){
+  const sorted = [...STATE.responsabili].sort((a,b) => a.Nume.localeCompare(b.Nume));
+  let opts = `<option value="">— fără responsabil —</option>`;
+  // daca valoarea curenta (dintr-un task mai vechi) nu e in lista, o pastram ca sa nu se piarda
+  if(selectedNume && !sorted.some(r => r.Nume === selectedNume)){
+    opts += `<option value="${escapeHtml(selectedNume)}" selected>${escapeHtml(selectedNume)} (necatalogat)</option>`;
+  }
+  opts += sorted.map(r =>
+    `<option value="${escapeHtml(r.Nume)}" ${r.Nume===selectedNume?'selected':''}>${escapeHtml(r.Nume)} — ${escapeHtml(r.Departament||'')}</option>`
+  ).join('');
+  return opts;
+}
+
+function renderResponsabilField(selectedNume){
+  return `
+    <div class="field">
+      <label>Responsabil</label>
+      <select id="f_resp" onchange="syncDepFromResp(this.value)">${responsabilOptions(selectedNume)}</select>
+      <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="toggleAddResp()">+ Responsabil nou</button>
+      <div id="addRespBox" style="display:none; margin-top:8px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg);">
+        <div class="field" style="margin-bottom:8px;"><input id="newRespNume" placeholder="Nume responsabil"></div>
+        <div class="field" style="margin-bottom:8px;">
+          <select id="newRespDep">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
+        </div>
+        <div style="display:flex;gap:8px;">
+          <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddResp()">Anulează</button>
+          <button type="button" class="btn btn-gold btn-sm" onclick="submitAddResponsabil()">Salvează responsabil</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+function toggleAddResp(){
+  const box = document.getElementById('addRespBox');
+  if(box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+function syncDepFromResp(nume){
+  const person = STATE.responsabili.find(r => r.Nume === nume);
+  const depSel = document.getElementById('f_dep');
+  if(person && depSel) depSel.value = person.Departament;
+}
+
+async function submitAddResponsabil(){
+  const numeInput = document.getElementById('newRespNume');
+  const nume = numeInput.value.trim();
+  if(!nume){ showToast('Numele responsabilului e obligatoriu'); return; }
+  const dep = document.getElementById('newRespDep').value;
+  await withLock(async () => {
+    try{
+      const r = await apiPost('addResponsabil', { Nume: nume, Departament: dep });
+      STATE.responsabili.push({ ID: r.id, Nume: nume, Departament: dep });
+      // actualizam dropdown-ul din formularul deschis fara sa pierdem restul campurilor completate
+      const sel = document.getElementById('f_resp');
+      if(sel){
+        const opt = document.createElement('option');
+        opt.value = nume;
+        opt.textContent = nume + ' — ' + dep;
+        sel.appendChild(opt);
+        sel.value = nume;
+      }
+      const depSel = document.getElementById('f_dep');
+      if(depSel) depSel.value = dep;
+      numeInput.value = '';
+      document.getElementById('addRespBox').style.display = 'none';
+      showToast('Responsabil adăugat: ' + nume);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
 }
 
 function progressFromTasks(tasks){
@@ -613,11 +683,9 @@ function modalTask(subId){
     <div class="modal">
       <h3 class="display">Task nou</h3>
       <div class="field"><label>Nume task</label><input id="f_nume" placeholder="ex: Trimitere probă la analiză"></div>
-      <div class="field-row">
-        <div class="field"><label>Responsabil</label><input id="f_resp" value="${escapeHtml(localStorage.getItem('mp_whoami')||'')}"></div>
-        <div class="field"><label>Departament</label>
-          <select id="f_dep">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
-        </div>
+      ${renderResponsabilField('')}
+      <div class="field"><label>Departament</label>
+        <select id="f_dep">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
       </div>
       <div class="field-row">
         <div class="field"><label>Data start</label><input id="f_start" type="date"></div>
@@ -664,11 +732,9 @@ function modalTaskDetail(taskId){
     <div class="modal">
       <h3 class="display">Detalii task</h3>
       <div class="field"><label>Nume task</label><input id="f_nume" value="${escapeHtml(t.Nume)}"></div>
-      <div class="field-row">
-        <div class="field"><label>Responsabil</label><input id="f_resp" value="${escapeHtml(t.Responsabil||'')}"></div>
-        <div class="field"><label>Departament</label>
-          <select id="f_dep">${DEPARTAMENTE.map(d=>`<option ${d===t.Departament?'selected':''}>${d}</option>`).join('')}</select>
-        </div>
+      ${renderResponsabilField(t.Responsabil||'')}
+      <div class="field"><label>Departament</label>
+        <select id="f_dep">${DEPARTAMENTE.map(d=>`<option ${d===t.Departament?'selected':''}>${d}</option>`).join('')}</select>
       </div>
       <div class="field-row">
         <div class="field"><label>Data start</label><input id="f_start" type="date" value="${toDateInput(t.DataStart)}"></div>
