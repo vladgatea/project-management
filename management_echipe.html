@@ -1,0 +1,833 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Management Echipe · Ferma cu Omenie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F3EE; --surface:#FFFFFF; --ink:#1F2C29; --ink-soft:#5C6B66; --line:#DEDDD2;
+    --gold:#AD8A34; --gold-soft:#F1E7CC;
+    --ok:#4C7A62; --ok-soft:#E4EEE8;
+    --risk:#C1762C; --risk-soft:#F5E7D6;
+    --late:#AE4B3E; --late-soft:#F5E1DD;
+    --planned:#6C7A86; --planned-soft:#E7EBEE;
+    --radius:14px; --shadow: 0 1px 2px rgba(31,44,41,.05), 0 6px 20px rgba(31,44,41,.06);
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,.display{ font-family:'Fraunces',serif; font-weight:600; letter-spacing:-.01em; }
+  button{ font-family:inherit; cursor:pointer; } input,select,textarea{ font-family:inherit; } a{ color:inherit; }
+
+  .app{ display:flex; min-height:100vh; }
+  .sidebar{ width:250px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line); padding:22px 14px; display:flex; flex-direction:column; gap:6px; }
+  .brand{ display:flex; flex-direction:column; gap:2px; padding:0 8px 14px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+  .brand .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  .brand h1{ font-size:19px; margin:2px 0 0; }
+  .back-link{ font-size:11.5px; color:var(--ink-soft); text-decoration:none; margin-top:6px; display:inline-block; }
+
+  .whoami-box{ padding:8px; background:var(--bg); border-radius:10px; margin-bottom:10px; }
+  .whoami-box label{ font-size:10.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.05em; }
+  .whoami-box select{ width:100%; border:1px solid var(--line); border-radius:8px; padding:7px 8px; font-size:12.5px; margin-top:4px; }
+
+  .nav-item{ display:flex; align-items:center; gap:10px; padding:9px 12px; border-radius:9px; font-size:13.5px; font-weight:600; color:var(--ink-soft); border:none; background:transparent; text-align:left; width:100%; }
+  .nav-item:hover{ background:var(--bg); color:var(--ink); }
+  .nav-item.active{ background:var(--gold-soft); color:var(--ink); }
+  .nav-badge{ margin-left:auto; background:var(--late); color:#fff; font-size:10px; font-weight:700; border-radius:999px; padding:1px 6px; }
+
+  .btn{ border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:10px; padding:9px 14px; font-size:13.5px; font-weight:600; display:inline-flex; align-items:center; gap:8px; transition:.15s; }
+  .btn:hover{ border-color:var(--ink); }
+  .btn-primary{ background:var(--ink); color:#fff; border-color:var(--ink); } .btn-primary:hover{ background:#0f1917; }
+  .btn-gold{ background:var(--gold); color:#fff; border-color:var(--gold); } .btn-gold:hover{ background:#93752b; }
+  .btn-ghost{ border-color:transparent; background:transparent; } .btn-ghost:hover{ background:var(--bg); }
+  .btn-sm{ padding:6px 10px; font-size:12.5px; border-radius:8px; }
+  .btn-block{ width:100%; justify-content:center; }
+
+  .main{ flex:1; min-width:0; padding:26px 34px 60px; }
+  .view-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:20px; flex-wrap:wrap; gap:10px; }
+  .view-head h2{ font-size:22px; margin:0; }
+
+  .cards{ display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:14px; margin-bottom:26px; }
+  .stat-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow); }
+  .stat-card .num{ font-family:'Fraunces',serif; font-size:28px; font-weight:600; }
+  .stat-card .lbl{ font-size:11.5px; color:var(--ink-soft); margin-top:2px; }
+  .stat-card.late .num{ color:var(--late); }
+  .stat-card.ok .num{ color:var(--ok); }
+  .stat-card.gold .num{ color:var(--gold); }
+
+  .filters{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .filters select, .filters input{ border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12.5px; background:var(--surface); }
+
+  .task-table{ width:100%; border-collapse:collapse; background:var(--surface); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+  .task-table th{ text-align:left; font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); padding:10px 14px; border-bottom:1px solid var(--line); background:var(--bg); }
+  .task-table td{ padding:11px 14px; font-size:13px; border-bottom:1px solid var(--line); }
+  .task-table tr:last-child td{ border-bottom:none; }
+  .task-table tr.clickable{ cursor:pointer; }
+  .task-table tr.clickable:hover{ background:var(--bg); }
+  .t-title{ font-weight:600; }
+  .t-overdue{ color:var(--late); font-weight:700; }
+  .empty-row{ text-align:center; color:var(--ink-soft); padding:30px !important; }
+
+  .status-pill{ font-size:10.5px; font-weight:700; padding:4px 9px; border-radius:999px; text-transform:uppercase; letter-spacing:.03em; white-space:nowrap; }
+  .status-De-facut{ background:var(--planned-soft); color:var(--planned); }
+  .status-In-lucru{ background:var(--ok-soft); color:var(--ok); }
+  .status-Blocat{ background:var(--late-soft); color:var(--late); }
+  .status-Trimis-spre-verificare{ background:var(--risk-soft); color:var(--risk); }
+  .status-Aprobat{ background:var(--gold-soft); color:var(--gold); }
+  .status-Respins{ background:var(--late-soft); color:var(--late); }
+  .status-Anulat{ background:var(--planned-soft); color:var(--planned); }
+  .prio-Urgenta{ color:var(--late); font-weight:700; }
+  .prio-Ridicata{ color:var(--risk); font-weight:700; }
+
+  .empty-state{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:100px 20px; color:var(--ink-soft); text-align:center; }
+  .empty-state h2{ color:var(--ink); }
+
+  .overlay{ position:fixed; inset:0; background:rgba(20,26,24,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; overflow-y:auto; }
+  .modal{ background:var(--surface); border-radius:16px; padding:26px; width:100%; max-width:520px; box-shadow:0 20px 60px rgba(0,0,0,.25); max-height:88vh; overflow-y:auto; }
+  .modal.wide{ max-width:680px; }
+  .modal h3{ margin:0 0 4px; font-size:18px; }
+  .modal .sub{ font-size:12px; color:var(--ink-soft); margin:0 0 16px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; }
+  .field input, .field select, .field textarea{ width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:13.5px; color:var(--ink); background:#fff; }
+  .field textarea{ resize:vertical; min-height:56px; }
+  .field-row{ display:flex; gap:10px; } .field-row .field{ flex:1; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+  .checkbox-row{ display:flex; align-items:center; gap:8px; font-size:13px; }
+  .checkbox-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:9px; padding:10px; }
+  .checkbox-grid label{ display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400; }
+  .day-toggle{ display:flex; gap:6px; flex-wrap:wrap; }
+  .day-toggle button{ border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:6px 10px; font-size:12px; }
+  .day-toggle button.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
+
+  .task-detail-head{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; margin-bottom:6px; }
+  .task-detail-meta{ font-size:12px; color:var(--ink-soft); margin-bottom:16px; display:flex; gap:12px; flex-wrap:wrap; }
+  .action-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+  .info-box{ background:var(--bg); border-radius:10px; padding:12px 14px; font-size:13px; margin-bottom:14px; white-space:pre-wrap; }
+  .result-box{ border:1px solid var(--gold); background:var(--gold-soft); border-radius:10px; padding:12px 14px; margin-bottom:14px; }
+  .result-box .lbl{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--gold); font-weight:700; margin-bottom:6px; }
+
+  .comment-list{ display:flex; flex-direction:column; gap:10px; margin-bottom:12px; max-height:220px; overflow-y:auto; }
+  .comment{ background:var(--bg); border-radius:10px; padding:9px 12px; font-size:12.5px; }
+  .comment .who{ font-weight:700; font-size:11.5px; } .comment .when{ color:var(--ink-soft); font-size:10.5px; margin-left:6px; }
+  .comment-add{ display:flex; gap:8px; }
+  .comment-add input{ flex:1; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12.5px; }
+
+  .notif-item{ display:flex; gap:10px; padding:12px 14px; border-radius:10px; background:var(--surface); border:1px solid var(--line); margin-bottom:8px; cursor:pointer; }
+  .notif-item.unread{ border-color:var(--gold); background:var(--gold-soft); }
+  .notif-item .when{ font-size:11px; color:var(--ink-soft); }
+
+  .admin-grid{ display:grid; grid-template-columns:1fr 1fr; gap:20px; }
+  .admin-card{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:18px; box-shadow:var(--shadow); }
+  .admin-card h3{ font-size:15px; margin:0 0 12px; }
+  .admin-row{ display:flex; justify-content:space-between; align-items:center; padding:8px 4px; border-bottom:1px solid var(--bg); font-size:13px; }
+  .admin-row .tag{ font-size:10.5px; background:var(--bg); padding:2px 8px; border-radius:999px; color:var(--ink-soft); }
+  .inactive{ opacity:.5; }
+
+  .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; box-shadow:var(--shadow); z-index:100; opacity:0; transition:.25s; pointer-events:none; }
+  .toast.show{ opacity:1; }
+  body.busy .btn{ pointer-events:none; opacity:.5; cursor:wait; } body.busy{ cursor:wait; }
+
+  @media (max-width: 900px){
+    .app{ flex-direction:column; } .sidebar{ width:100%; border-right:none; border-bottom:1px solid var(--line); }
+    .main{ padding:18px; } .admin-grid{ grid-template-columns:1fr; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="eyebrow">Ferma cu Omenie</span>
+      <h1>Echipe</h1>
+      <a class="back-link" href="index.html">← înapoi la selector</a>
+    </div>
+
+    <div class="whoami-box">
+      <label>Cine ești?</label>
+      <select id="whoamiSelect" onchange="setWhoami(this.value)"></select>
+    </div>
+
+    <button class="nav-item" data-view="dashboard" onclick="goView('dashboard')">🏠 Dashboard</button>
+    <button class="nav-item" data-view="myTasks" onclick="goView('myTasks')">✅ Taskurile mele</button>
+    <button class="nav-item" data-view="allTasks" onclick="goView('allTasks')">📋 Toate taskurile</button>
+    <button class="nav-item" data-view="sabloane" onclick="goView('sabloane')">🔁 Taskuri recurente</button>
+    <button class="nav-item" data-view="echipa" onclick="goView('echipa')">👥 Echipă &amp; departamente</button>
+    <button class="nav-item" data-view="notificari" onclick="goView('notificari')">🔔 Notificări <span class="nav-badge" id="notifBadge" style="display:none;"></span></button>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="empty-state"><h2>Se încarcă…</h2></div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIG — inlocuieste cu URL-ul tau de Apps Script Echipe (.../exec)
+   ========================================================= */
+const SCRIPT_URL_ECHIPE = "https://script.google.com/macros/s/AKfycbyPZZHK5rqGMRQsmNbYZdNJW1_fxcUKjS0UidgfzcOPRJT3WKT0SKXM2AloeNNpNYcM/exec";
+
+const PRIORITATI = ["Scazuta","Normala","Ridicata","Urgenta"];
+const TASK_STATUSES = ["De facut","In lucru","Blocat","Trimis spre verificare","Aprobat","Respins","Anulat"];
+const TIPURI_RECURENTA = [
+  { v:"Zilnic", l:"Zilnic" },
+  { v:"ZileLucratoare", l:"Doar zile lucrătoare" },
+  { v:"ZileSaptamana", l:"Anumite zile ale săptămânii" },
+  { v:"Lunar", l:"Lunar (o zi fixă)" }
+];
+const ZILE_SAPT = ["Luni","Marti","Miercuri","Joi","Vineri","Sambata","Duminica"];
+
+let STATE = { departamente:[], angajati:[], taskuri:[], sabloane:[], comentarii:[], notificari:[] };
+let CURRENT_VIEW = 'dashboard';
+let ACTION_BUSY = false;
+
+function scriptUrl(){ return SCRIPT_URL_ECHIPE; }
+function meNume(){ return localStorage.getItem('echipe_whoami') || ''; }
+function meAngajat(){ return STATE.angajati.find(a => a.Nume === meNume()); }
+function isManager(){ const m = meAngajat(); return !!m && m.Rol === 'Manager'; }
+
+async function withLock(fn){
+  if(ACTION_BUSY){ showToast('Se procesează deja o acțiune — așteaptă puțin'); return; }
+  ACTION_BUSY = true; document.body.classList.add('busy');
+  try{ await fn(); } finally { ACTION_BUSY = false; document.body.classList.remove('busy'); }
+}
+
+async function apiGet(){
+  const res = await fetch(scriptUrl() + '?action=getAll');
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Eroare la citire');
+  return json.data;
+}
+async function apiPost(action, payload){
+  const res = await fetch(scriptUrl(), { method:'POST', body: JSON.stringify({ action, payload }) });
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Eroare la scriere');
+  return json;
+}
+
+async function loadAll(){
+  try{
+    STATE = await apiGet();
+    fillWhoami();
+    renderNav();
+    render();
+  }catch(err){
+    document.getElementById('main').innerHTML = `<div class="empty-state"><h2>Nu m-am putut conecta</h2><p>${escapeHtml(err.message)}</p><p style="font-size:12px">Verifică SCRIPT_URL_ECHIPE și că web app-ul e publicat cu acces "Anyone".</p></div>`;
+  }
+}
+
+function fillWhoami(){
+  const sel = document.getElementById('whoamiSelect');
+  const sorted = [...STATE.angajati].filter(a=>a.Activ===true||a.Activ==='TRUE').sort((a,b)=>a.Nume.localeCompare(b.Nume));
+  sel.innerHTML = `<option value="">— alege —</option>` + sorted.map(a =>
+    `<option value="${escapeHtml(a.Nume)}" ${a.Nume===meNume()?'selected':''}>${escapeHtml(a.Nume)} (${escapeHtml(a.Rol)})</option>`).join('');
+}
+function setWhoami(nume){ localStorage.setItem('echipe_whoami', nume); renderNav(); render(); }
+
+function goView(v){ CURRENT_VIEW = v; renderNav(); render(); }
+
+function renderNav(){
+  document.querySelectorAll('.nav-item').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.view === CURRENT_VIEW);
+    if(['allTasks','sabloane','echipa'].includes(btn.dataset.view)){
+      btn.style.display = isManager() ? '' : 'none';
+    }
+  });
+  const myNotifs = STATE.notificari.filter(n => n.Destinatar === meNume() && n.Citit !== true && n.Citit !== 'TRUE');
+  const badge = document.getElementById('notifBadge');
+  if(myNotifs.length){ badge.style.display='inline-block'; badge.textContent = myNotifs.length; }
+  else badge.style.display = 'none';
+}
+
+/* ---------------- helpers ---------------- */
+
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function statusClass(s){ return 'status-' + String(s||'').replace(/\s+/g,'-'); }
+function fmtDate(d){ if(!d) return '—'; const dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'}); }
+function todayStr(){ return new Date().toISOString().slice(0,10); }
+function isOverdue(t){ return t.Deadline && String(t.Deadline).slice(0,10) < todayStr() && !['Aprobat','Anulat'].includes(t.Status); }
+function myTasksList(){ return STATE.taskuri.filter(t => t.AngajatNume === meNume()); }
+function showToast(msg){ const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2400); }
+
+/* ---------------- render router ---------------- */
+
+function render(){
+  if(!meNume()){
+    document.getElementById('main').innerHTML = `<div class="empty-state"><h2>Alege-ți numele din stânga</h2><p>Ca să vezi taskurile tale și, dacă ești manager, echipa.</p></div>`;
+    return;
+  }
+  if(CURRENT_VIEW === 'dashboard') return renderDashboard();
+  if(CURRENT_VIEW === 'myTasks') return renderTaskListView('Taskurile mele', myTasksList(), true);
+  if(CURRENT_VIEW === 'allTasks') return renderAllTasks();
+  if(CURRENT_VIEW === 'sabloane') return renderSabloane();
+  if(CURRENT_VIEW === 'echipa') return renderEchipa();
+  if(CURRENT_VIEW === 'notificari') return renderNotificari();
+}
+
+/* ---------------- dashboard ---------------- */
+
+function renderDashboard(){
+  const mine = myTasksList();
+  const azi = mine.filter(t => t.Deadline && String(t.Deadline).slice(0,10) === todayStr());
+  const intarziate = mine.filter(isOverdue);
+  const urgente = mine.filter(t => t.Prioritate === 'Urgenta' && !['Aprobat','Anulat'].includes(t.Status));
+  const inLucru = mine.filter(t => t.Status === 'In lucru');
+  const blocate = mine.filter(t => t.Status === 'Blocat');
+  const asteapta = mine.filter(t => t.Status === 'Trimis spre verificare');
+
+  let managerCards = '';
+  if(isManager()){
+    const echipa = STATE.angajati.filter(a => a.Manager === meNume());
+    const echipaNumes = echipa.map(a=>a.Nume);
+    const taskuriEchipa = STATE.taskuri.filter(t => echipaNumes.includes(t.AngajatNume));
+    const deVerificat = taskuriEchipa.filter(t => t.Status === 'Trimis spre verificare');
+    const intarziateEchipa = taskuriEchipa.filter(isOverdue);
+    managerCards = `
+      <div class="stat-card gold"><div class="num">${deVerificat.length}</div><div class="lbl">de verificat (echipă)</div></div>
+      <div class="stat-card late"><div class="num">${intarziateEchipa.length}</div><div class="lbl">întârziate (echipă)</div></div>
+      <div class="stat-card"><div class="num">${echipa.length}</div><div class="lbl">oameni în echipă</div></div>`;
+  }
+
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">Bună, ${escapeHtml(meNume().split(' ')[0])}</h2>
+      <button class="btn btn-primary" onclick="openModal('task')">+ Task nou</button>
+    </div>
+    <div class="cards">
+      <div class="stat-card"><div class="num">${azi.length}</div><div class="lbl">astăzi</div></div>
+      <div class="stat-card late"><div class="num">${intarziate.length}</div><div class="lbl">întârziate</div></div>
+      <div class="stat-card late"><div class="num">${urgente.length}</div><div class="lbl">urgente</div></div>
+      <div class="stat-card ok"><div class="num">${inLucru.length}</div><div class="lbl">în lucru</div></div>
+      <div class="stat-card late"><div class="num">${blocate.length}</div><div class="lbl">blocate</div></div>
+      <div class="stat-card gold"><div class="num">${asteapta.length}</div><div class="lbl">în așteptare verificare</div></div>
+      ${managerCards}
+    </div>
+    <h3 class="display" style="font-size:16px;margin-bottom:10px;">Taskurile mele active</h3>
+    ${taskTable(mine.filter(t => !['Aprobat','Anulat'].includes(t.Status)), true)}
+  `;
+}
+
+/* ---------------- task list views ---------------- */
+
+function renderTaskListView(title, tasks, mine){
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">${title}</h2><button class="btn btn-primary" onclick="openModal('task')">+ Task nou</button></div>
+    ${taskTable(tasks, mine)}
+  `;
+}
+
+function renderAllTasks(){
+  if(!isManager()){ goView('dashboard'); return; }
+  const deps = [...new Set(STATE.angajati.map(a=>a.Departament))].filter(Boolean);
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">Toate taskurile</h2><button class="btn btn-primary" onclick="openModal('task')">+ Task nou</button></div>
+    <div class="filters">
+      <select id="flt_dep" onchange="applyFilters()"><option value="">Toate departamentele</option>${deps.map(d=>`<option>${d}</option>`).join('')}</select>
+      <select id="flt_status" onchange="applyFilters()"><option value="">Toate statusurile</option>${TASK_STATUSES.map(s=>`<option>${s}</option>`).join('')}</select>
+      <select id="flt_prio" onchange="applyFilters()"><option value="">Toate prioritățile</option>${PRIORITATI.map(p=>`<option>${p}</option>`).join('')}</select>
+      <input id="flt_search" placeholder="Caută titlu / responsabil…" oninput="applyFilters()">
+    </div>
+    <div id="allTasksTable">${taskTable(STATE.taskuri, false)}</div>
+  `;
+}
+
+function applyFilters(){
+  const dep = document.getElementById('flt_dep').value;
+  const status = document.getElementById('flt_status').value;
+  const prio = document.getElementById('flt_prio').value;
+  const q = document.getElementById('flt_search').value.trim().toLowerCase();
+  let list = STATE.taskuri.filter(t =>
+    (!dep || t.Departament === dep) &&
+    (!status || t.Status === status) &&
+    (!prio || t.Prioritate === prio) &&
+    (!q || (t.Titlu||'').toLowerCase().includes(q) || (t.AngajatNume||'').toLowerCase().includes(q))
+  );
+  document.getElementById('allTasksTable').innerHTML = taskTable(list, false);
+}
+
+function taskTable(tasks, mine){
+  const sorted = [...tasks].sort((a,b) => (a.Deadline||'').localeCompare(b.Deadline||''));
+  const rows = sorted.map(t => `
+    <tr class="clickable" onclick="openModal('taskDetail','${t.ID}')">
+      <td class="t-title">${escapeHtml(t.Titlu)}</td>
+      ${mine ? '' : `<td>${escapeHtml(t.AngajatNume||'—')}</td>`}
+      <td>${escapeHtml(t.Departament||'')}</td>
+      <td class="${t.Prioritate==='Urgenta'?'prio-Urgenta':t.Prioritate==='Ridicata'?'prio-Ridicata':''}">${escapeHtml(t.Prioritate||'')}</td>
+      <td class="${isOverdue(t)?'t-overdue':''}">${isOverdue(t)?'⚠ ':''}${fmtDate(t.Deadline)}</td>
+      <td><span class="status-pill ${statusClass(t.Status)}">${escapeHtml(t.Status||'')}</span></td>
+    </tr>`).join('');
+  return `
+    <table class="task-table">
+      <thead><tr>
+        <th>Titlu</th>${mine?'':'<th>Responsabil</th>'}<th>Departament</th><th>Prioritate</th><th>Deadline</th><th>Status</th>
+      </tr></thead>
+      <tbody>${rows || `<tr><td class="empty-row" colspan="6">Niciun task.</td></tr>`}</tbody>
+    </table>`;
+}
+
+/* ---------------- sabloane recurente ---------------- */
+
+function renderSabloane(){
+  if(!isManager()){ goView('dashboard'); return; }
+  const rows = STATE.sabloane.map(s => `
+    <tr>
+      <td class="t-title">${escapeHtml(s.Titlu)}</td>
+      <td>${escapeHtml(s.AngajatNume||'')}</td>
+      <td>${TIPURI_RECURENTA.find(x=>x.v===s.TipRecurenta)?.l || escapeHtml(s.TipRecurenta)}</td>
+      <td>${escapeHtml(s.OraLimita||'')}</td>
+      <td><span class="status-pill ${s.Activ===true||s.Activ==='TRUE' ? 'status-In-lucru' : 'status-Anulat'}">${(s.Activ===true||s.Activ==='TRUE')?'Activ':'Inactiv'}</span></td>
+      <td><button class="btn btn-ghost btn-sm" onclick="submitDeleteSablon('${s.ID}')">Șterge</button></td>
+    </tr>`).join('');
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">Taskuri recurente</h2><button class="btn btn-primary" onclick="openModal('sablon')">+ Șablon nou</button></div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-10px;">Instanțele zilei se generează automat printr-un trigger Apps Script (vezi comentariul din Code_Echipe.gs).</p>
+    <table class="task-table">
+      <thead><tr><th>Titlu</th><th>Responsabil</th><th>Recurență</th><th>Ora limită</th><th>Stare</th><th></th></tr></thead>
+      <tbody>${rows || `<tr><td class="empty-row" colspan="6">Niciun șablon încă.</td></tr>`}</tbody>
+    </table>`;
+}
+
+async function submitDeleteSablon(id){
+  if(!confirm('Ștergi acest șablon? Instanțele deja create nu sunt afectate.')) return;
+  await withLock(async () => {
+    try{ await apiPost('deleteSablon', { ID:id }); showToast('Șablon șters'); await loadAll(); goView('sabloane'); }
+    catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+/* ---------------- echipa & departamente ---------------- */
+
+function renderEchipa(){
+  if(!isManager()){ goView('dashboard'); return; }
+  const deps = STATE.departamente.map(d => `
+    <div class="admin-row"><span>${escapeHtml(d.Nume)}</span></div>`).join('') || `<p style="font-size:12.5px;color:var(--ink-soft);">Niciun departament.</p>`;
+  const angajati = [...STATE.angajati].sort((a,b)=>a.Nume.localeCompare(b.Nume)).map(a => `
+    <div class="admin-row ${(a.Activ===false||a.Activ==='FALSE')?'inactive':''}">
+      <span>${escapeHtml(a.Nume)} <span class="tag">${escapeHtml(a.Departament||'')}</span> <span class="tag">${escapeHtml(a.Rol||'')}</span></span>
+      <button class="btn btn-ghost btn-sm" onclick="toggleActivAngajat('${a.ID}', ${a.Activ===false||a.Activ==='FALSE'})">${(a.Activ===false||a.Activ==='FALSE')?'Reactivează':'Dezactivează'}</button>
+    </div>`).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">Echipă &amp; departamente</h2></div>
+    <div class="admin-grid">
+      <div class="admin-card">
+        <h3>Departamente</h3>
+        ${deps}
+        <div style="display:flex;gap:8px;margin-top:12px;">
+          <input id="newDepNume" placeholder="Departament nou" style="flex:1;border:1px solid var(--line);border-radius:8px;padding:7px 10px;font-size:12.5px;">
+          <button class="btn btn-gold btn-sm" onclick="submitAddDepartament()">+ Adaugă</button>
+        </div>
+      </div>
+      <div class="admin-card">
+        <h3>Angajați</h3>
+        ${angajati}
+        <button class="btn btn-primary btn-sm btn-block" style="margin-top:12px;" onclick="openModal('angajat')">+ Angajat nou</button>
+      </div>
+    </div>`;
+}
+
+async function submitAddDepartament(){
+  const nume = document.getElementById('newDepNume').value.trim();
+  if(!nume){ showToast('Numele departamentului e obligatoriu'); return; }
+  await withLock(async () => {
+    try{ await apiPost('addDepartament', { Nume: nume }); showToast('Departament adăugat'); await loadAll(); goView('echipa'); }
+    catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+async function toggleActivAngajat(id, reactivate){
+  await withLock(async () => {
+    try{ await apiPost('updateAngajat', { ID:id, Activ: !!reactivate }); await loadAll(); goView('echipa'); }
+    catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+/* ---------------- notificari ---------------- */
+
+function renderNotificari(){
+  const mine = STATE.notificari.filter(n => n.Destinatar === meNume()).sort((a,b) => (b.DataOra||'').localeCompare(a.DataOra||''));
+  const rows = mine.map(n => {
+    const unread = n.Citit !== true && n.Citit !== 'TRUE';
+    return `<div class="notif-item ${unread?'unread':''}" onclick="openNotificare('${n.ID}','${n.TaskID||''}')">
+      <div style="flex:1;">
+        <div>${escapeHtml(n.Mesaj)}</div>
+        <div class="when">${fmtDate(n.DataOra)}</div>
+      </div>
+    </div>`;
+  }).join('');
+  document.getElementById('main').innerHTML = `
+    <div class="view-head"><h2 class="display">Notificări</h2></div>
+    ${rows || `<p style="color:var(--ink-soft);font-size:13px;">Nicio notificare.</p>`}`;
+}
+
+async function openNotificare(id, taskId){
+  await withLock(async () => {
+    try{ await apiPost('marcheazaNotificareCitita', { ID:id }); await loadAll(); }
+    catch(err){ /* silentios */ }
+  });
+  if(taskId) openModal('taskDetail', taskId);
+  else goView('notificari');
+}
+
+/* ---------------- modals ---------------- */
+
+function openModalWrap(html){
+  closeModal();
+  const wrap = document.createElement('div');
+  wrap.className = 'overlay'; wrap.id = 'overlay';
+  wrap.onclick = (e) => { if(e.target.id === 'overlay') closeModal(); };
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap);
+}
+function closeModal(){ const el = document.getElementById('overlay'); if(el) el.remove(); }
+
+function openModal(type, arg){
+  if(type === 'task') openModalWrap(modalTask());
+  else if(type === 'taskDetail') openModalWrap(modalTaskDetail(arg));
+  else if(type === 'sablon') openModalWrap(modalSablon());
+  else if(type === 'angajat') openModalWrap(modalAngajat());
+}
+
+function angajatiOptions(selected){
+  const sorted = [...STATE.angajati].filter(a=>a.Activ===true||a.Activ==='TRUE').sort((a,b)=>a.Nume.localeCompare(b.Nume));
+  return sorted.map(a => `<label><input type="checkbox" value="${escapeHtml(a.Nume)}" data-dep="${escapeHtml(a.Departament)}" data-mgr="${escapeHtml(a.Manager||'')}" ${selected&&selected.includes(a.Nume)?'checked':''}> ${escapeHtml(a.Nume)}</label>`).join('');
+}
+
+function modalTask(){
+  const deps = [...new Set(STATE.angajati.map(a=>a.Departament))].filter(Boolean);
+  return `
+    <div class="modal wide">
+      <h3 class="display">Task nou</h3>
+      <p class="sub">Poți alege mai mulți responsabili — fiecare va primi propria instanță, cu propriul rezultat.</p>
+      <div class="field"><label>Titlu</label><input id="f_titlu" placeholder="ex: Raport vânzări zilnic"></div>
+      <div class="field"><label>Descriere</label><textarea id="f_desc"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
+        <div class="field"><label>Prioritate</label><select id="f_prio">${PRIORITATI.map(p=>`<option ${p==='Normala'?'selected':''}>${p}</option>`).join('')}</select></div>
+      </div>
+      <div class="field"><label>Responsabili</label><div class="checkbox-grid">${angajatiOptions([meNume()])}</div></div>
+      <div class="field-row">
+        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${todayStr()}"></div>
+        <div class="field"><label>Deadline</label><input id="f_deadline" type="date" value="${todayStr()}"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Ora limită</label><input id="f_ora" type="time" value="18:00"></div>
+        <div class="field"><label>Estimare (ore)</label><input id="f_estimare" type="number" min="0" step="0.5"></div>
+      </div>
+      <div class="field"><label>Instrucțiuni</label><textarea id="f_instr"></textarea></div>
+      <div class="field"><label>Rezultat așteptat</label><input id="f_rezasteptat" placeholder="ex: Numărul de comenzi procesate"></div>
+      <div class="checkbox-row" style="margin-bottom:14px;"><input type="checkbox" id="f_aprobare"> <label for="f_aprobare" style="margin:0;font-weight:400;">Necesită aprobarea managerului la finalizare</label></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
+        <button class="btn btn-primary" onclick="submitTask()">Salvează</button>
+      </div>
+    </div>`;
+}
+
+async function submitTask(){
+  const titlu = document.getElementById('f_titlu').value.trim();
+  if(!titlu){ showToast('Titlul e obligatoriu'); return; }
+  const checked = Array.from(document.querySelectorAll('.checkbox-grid input:checked'));
+  if(!checked.length){ showToast('Alege cel puțin un responsabil'); return; }
+  const dep = document.getElementById('f_dep').value;
+  const base = {
+    Titlu: titlu,
+    Descriere: document.getElementById('f_desc').value.trim(),
+    Departament: dep,
+    Prioritate: document.getElementById('f_prio').value,
+    DataStart: document.getElementById('f_start').value,
+    Deadline: document.getElementById('f_deadline').value,
+    OraLimita: document.getElementById('f_ora').value,
+    EstimareOre: document.getElementById('f_estimare').value,
+    Instructiuni: document.getElementById('f_instr').value.trim(),
+    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
+    NecesitaAprobare: document.getElementById('f_aprobare').checked,
+    Status: 'De facut',
+    CreatDe: meNume()
+  };
+  await withLock(async () => {
+    try{
+      await Promise.all(checked.map(chk => apiPost('addTask', {
+        ...base,
+        AngajatNume: chk.value,
+        ManagerNume: chk.dataset.mgr || meNume()
+      })));
+      closeModal();
+      showToast('Task creat pentru ' + checked.length + ' persoană/e');
+      await loadAll();
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function modalTaskDetail(taskId){
+  const t = STATE.taskuri.find(x => x.ID === taskId);
+  if(!t) return `<div class="modal"><p>Task negăsit.</p><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div></div>`;
+  const comentarii = STATE.comentarii.filter(c => c.TaskID === taskId).sort((a,b)=>(a.DataOra||'').localeCompare(b.DataOra||''));
+  const amIOwner = t.AngajatNume === meNume();
+  const amIManager = t.ManagerNume === meNume() || isManager();
+
+  let actions = '';
+  if(amIOwner){
+    if(t.Status === 'De facut') actions += `<button class="btn btn-gold btn-sm" onclick="setTaskStatus('${t.ID}','In lucru')">▶ Începe</button>`;
+    if(t.Status === 'In lucru'){
+      actions += `<button class="btn btn-ghost btn-sm" onclick="promptBlocaj('${t.ID}')">⛔ Marchează blocat</button>`;
+      actions += `<button class="btn btn-primary btn-sm" onclick="openRezultatForm('${t.ID}')">✔ Finalizează</button>`;
+    }
+    if(t.Status === 'Blocat') actions += `<button class="btn btn-gold btn-sm" onclick="setTaskStatus('${t.ID}','In lucru')">▶ Reia lucrul</button>`;
+    if(t.Status === 'Respins') actions += `<button class="btn btn-gold btn-sm" onclick="setTaskStatus('${t.ID}','In lucru')">↺ Reia (corectează)</button>`;
+  }
+  if(amIManager && t.Status === 'Trimis spre verificare'){
+    actions += `<button class="btn btn-gold btn-sm" onclick="setTaskStatus('${t.ID}','Aprobat')">✔ Aprobă</button>`;
+    actions += `<button class="btn btn-ghost btn-sm" onclick="setTaskStatus('${t.ID}','Respins')">✕ Respinge</button>`;
+  }
+
+  const rezultatBox = (t.Rezultat || t.ValoareNumerica || t.Link) ? `
+    <div class="result-box">
+      <div class="lbl">Rezultat obținut</div>
+      ${t.Rezultat ? `<div>${escapeHtml(t.Rezultat)}</div>` : ''}
+      ${t.ValoareNumerica ? `<div>Valoare: <b>${escapeHtml(t.ValoareNumerica)} ${escapeHtml(t.UnitateMasura||'')}</b></div>` : ''}
+      ${t.Procent ? `<div>Procent realizat: <b>${escapeHtml(t.Procent)}%</b></div>` : ''}
+      ${t.Link ? `<div>Link: <a href="${escapeHtml(t.Link)}" target="_blank">${escapeHtml(t.Link)}</a></div>` : ''}
+      ${t.Probleme ? `<div>Probleme: ${escapeHtml(t.Probleme)}</div>` : ''}
+    </div>` : '';
+
+  return `
+    <div class="modal wide">
+      <div class="task-detail-head">
+        <h3 class="display" style="margin:0;">${escapeHtml(t.Titlu)}</h3>
+        <span class="status-pill ${statusClass(t.Status)}">${escapeHtml(t.Status||'')}</span>
+      </div>
+      <div class="task-detail-meta">
+        <span>👤 ${escapeHtml(t.AngajatNume||'—')}</span>
+        <span>🏷 ${escapeHtml(t.Departament||'')}</span>
+        <span class="${isOverdue(t)?'t-overdue':''}">📅 ${fmtDate(t.Deadline)} ${t.OraLimita?('· '+t.OraLimita):''}</span>
+        <span class="${t.Prioritate==='Urgenta'?'prio-Urgenta':''}">⚡ ${escapeHtml(t.Prioritate||'')}</span>
+      </div>
+      ${t.Descriere ? `<div class="info-box">${escapeHtml(t.Descriere)}</div>` : ''}
+      ${t.MotivBlocaj ? `<div class="info-box" style="border:1px solid var(--late);">⛔ Motiv blocaj: ${escapeHtml(t.MotivBlocaj)}</div>` : ''}
+      ${rezultatBox}
+      <div class="action-row">${actions || '<span style="font-size:12px;color:var(--ink-soft);">Nu ai acțiuni disponibile pe acest task.</span>'}</div>
+
+      <div class="field"><label>Comentarii</label></div>
+      <div class="comment-list">${comentarii.map(c => `<div class="comment"><span class="who">${escapeHtml(c.Autor)}</span><span class="when">${fmtDate(c.DataOra)}</span><div>${escapeHtml(c.Text)}</div></div>`).join('') || '<p style="font-size:12px;color:var(--ink-soft);">Niciun comentariu.</p>'}</div>
+      <div class="comment-add">
+        <input id="f_comentariu" placeholder="Scrie un comentariu…">
+        <button class="btn btn-gold btn-sm" onclick="submitComentariu('${t.ID}')">Trimite</button>
+      </div>
+
+      <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div>
+    </div>`;
+}
+
+async function setTaskStatus(taskId, status){
+  await withLock(async () => {
+    try{
+      await apiPost('updateTask', { ID: taskId, Status: status });
+      showToast('Status actualizat: ' + status);
+      await loadAll();
+      openModal('taskDetail', taskId);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function promptBlocaj(taskId){
+  const motiv = prompt('Care e motivul blocajului?');
+  if(!motiv) return;
+  withLock(async () => {
+    try{
+      await apiPost('updateTask', { ID: taskId, Status:'Blocat', MotivBlocaj: motiv });
+      showToast('Task marcat ca blocat');
+      await loadAll();
+      openModal('taskDetail', taskId);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function openRezultatForm(taskId){
+  const t = STATE.taskuri.find(x => x.ID === taskId);
+  openModalWrap(`
+    <div class="modal">
+      <h3 class="display">Finalizare task</h3>
+      <p class="sub">${t.RezultatAsteptat ? 'Rezultat așteptat: ' + escapeHtml(t.RezultatAsteptat) : 'Completează ce ai obținut.'}</p>
+      <div class="field"><label>Descrierea rezultatului</label><textarea id="f_rezultat"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Valoare numerică (opțional)</label><input id="f_valoare" type="number" step="any"></div>
+        <div class="field"><label>Unitate de măsură</label><input id="f_um" placeholder="ex: buc, kg, RON"></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Procent realizat</label><input id="f_procent" type="number" min="0" max="100"></div>
+        <div class="field"><label>Durata efectivă (ore)</label><input id="f_durata" type="number" step="0.5"></div>
+      </div>
+      <div class="field"><label>Link (document, poză, raport)</label><input id="f_link" placeholder="link Google Drive etc."></div>
+      <div class="field"><label>Probleme întâmpinate (opțional)</label><textarea id="f_probleme"></textarea></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="openModal('taskDetail','${taskId}')">Anulează</button>
+        <button class="btn btn-primary" onclick="submitRezultat('${taskId}')">Salvează rezultatul</button>
+      </div>
+    </div>`);
+}
+
+async function submitRezultat(taskId){
+  const t = STATE.taskuri.find(x => x.ID === taskId);
+  const nextStatus = (t.NecesitaAprobare === true || t.NecesitaAprobare === 'TRUE') ? 'Trimis spre verificare' : 'Aprobat';
+  const payload = {
+    ID: taskId,
+    Rezultat: document.getElementById('f_rezultat').value.trim(),
+    ValoareNumerica: document.getElementById('f_valoare').value,
+    UnitateMasura: document.getElementById('f_um').value.trim(),
+    Procent: document.getElementById('f_procent').value,
+    DurataEfectiva: document.getElementById('f_durata').value,
+    Link: document.getElementById('f_link').value.trim(),
+    Probleme: document.getElementById('f_probleme').value.trim(),
+    Status: nextStatus
+  };
+  await withLock(async () => {
+    try{
+      await apiPost('updateTask', payload);
+      showToast(nextStatus === 'Aprobat' ? 'Task finalizat' : 'Trimis spre verificare la manager');
+      await loadAll();
+      openModal('taskDetail', taskId);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+async function submitComentariu(taskId){
+  const input = document.getElementById('f_comentariu');
+  const text = input.value.trim();
+  if(!text) return;
+  await withLock(async () => {
+    try{
+      await apiPost('addComentariu', { TaskID: taskId, Autor: meNume(), Text: text });
+      await loadAll();
+      openModal('taskDetail', taskId);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function modalSablon(){
+  const deps = [...new Set(STATE.angajati.map(a=>a.Departament))].filter(Boolean);
+  return `
+    <div class="modal wide">
+      <h3 class="display">Șablon de task recurent</h3>
+      <div class="field"><label>Titlu</label><input id="f_titlu" placeholder="ex: Raport vânzări zilnic"></div>
+      <div class="field"><label>Descriere</label><textarea id="f_desc"></textarea></div>
+      <div class="field-row">
+        <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
+        <div class="field"><label>Responsabil</label><select id="f_angajat">${STATE.angajati.filter(a=>a.Activ===true||a.Activ==='TRUE').map(a=>`<option value="${escapeHtml(a.Nume)}" data-mgr="${escapeHtml(a.Manager||'')}">${escapeHtml(a.Nume)}</option>`).join('')}</select></div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Prioritate</label><select id="f_prio">${PRIORITATI.map(p=>`<option ${p==='Normala'?'selected':''}>${p}</option>`).join('')}</select></div>
+        <div class="field"><label>Ora limită</label><input id="f_ora" type="time" value="18:00"></div>
+      </div>
+      <div class="field"><label>Recurență</label><select id="f_tip" onchange="onTipRecurentaChange()">${TIPURI_RECURENTA.map(t=>`<option value="${t.v}">${t.l}</option>`).join('')}</select></div>
+      <div class="field" id="zileBox" style="display:none;">
+        <label>Zilele săptămânii</label>
+        <div class="day-toggle" id="dayToggle">${ZILE_SAPT.map(z=>`<button type="button" data-day="${z}" onclick="toggleDay(this)">${z.slice(0,3)}</button>`).join('')}</div>
+      </div>
+      <div class="field" id="ziuaLuniiBox" style="display:none;"><label>Ziua lunii (1-31)</label><input id="f_ziua" type="number" min="1" max="31"></div>
+      <div class="field-row">
+        <div class="field"><label>Start recurență</label><input id="f_startrec" type="date" value="${todayStr()}"></div>
+        <div class="field"><label>Final (opțional)</label><input id="f_finalrec" type="date"></div>
+      </div>
+      <div class="field"><label>Instrucțiuni</label><textarea id="f_instr"></textarea></div>
+      <div class="field"><label>Rezultat așteptat</label><input id="f_rezasteptat"></div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
+        <button class="btn btn-primary" onclick="submitSablon()">Salvează șablon</button>
+      </div>
+    </div>`;
+}
+
+function onTipRecurentaChange(){
+  const v = document.getElementById('f_tip').value;
+  document.getElementById('zileBox').style.display = (v === 'ZileSaptamana') ? 'block' : 'none';
+  document.getElementById('ziuaLuniiBox').style.display = (v === 'Lunar') ? 'block' : 'none';
+}
+function toggleDay(btn){ btn.classList.toggle('on'); }
+
+async function submitSablon(){
+  const titlu = document.getElementById('f_titlu').value.trim();
+  if(!titlu){ showToast('Titlul e obligatoriu'); return; }
+  const angajatSel = document.getElementById('f_angajat');
+  const zileSelectate = Array.from(document.querySelectorAll('#dayToggle button.on')).map(b => b.dataset.day).join(',');
+  const payload = {
+    Titlu: titlu,
+    Descriere: document.getElementById('f_desc').value.trim(),
+    Departament: document.getElementById('f_dep').value,
+    AngajatNume: angajatSel.value,
+    ManagerNume: angajatSel.selectedOptions[0].dataset.mgr || meNume(),
+    Prioritate: document.getElementById('f_prio').value,
+    OraLimita: document.getElementById('f_ora').value,
+    TipRecurenta: document.getElementById('f_tip').value,
+    ZileSaptamana: zileSelectate,
+    ZiuaLunii: document.getElementById('f_ziua').value,
+    DataStartRecurenta: document.getElementById('f_startrec').value,
+    DataFinalRecurenta: document.getElementById('f_finalrec').value,
+    Instructiuni: document.getElementById('f_instr').value.trim(),
+    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
+    Activ: true
+  };
+  await withLock(async () => {
+    try{
+      await apiPost('addSablon', payload);
+      closeModal();
+      showToast('Șablon creat');
+      await loadAll();
+      goView('sabloane');
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function modalAngajat(){
+  const deps = [...new Set(STATE.departamente.map(d=>d.Nume))];
+  const manageri = STATE.angajati.filter(a => a.Rol === 'Manager');
+  return `
+    <div class="modal">
+      <h3 class="display">Angajat nou</h3>
+      <div class="field"><label>Nume</label><input id="f_nume" placeholder="Nume complet"></div>
+      <div class="field-row">
+        <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
+        <div class="field"><label>Rol</label><select id="f_rol"><option>Angajat</option><option>Manager</option></select></div>
+      </div>
+      <div class="field"><label>Manager direct (opțional)</label>
+        <select id="f_manager"><option value="">— fără —</option>${manageri.map(m=>`<option>${escapeHtml(m.Nume)}</option>`).join('')}</select>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
+        <button class="btn btn-gold" onclick="submitAngajat()">Salvează</button>
+      </div>
+    </div>`;
+}
+
+async function submitAngajat(){
+  const nume = document.getElementById('f_nume').value.trim();
+  if(!nume){ showToast('Numele e obligatoriu'); return; }
+  const payload = {
+    Nume: nume,
+    Departament: document.getElementById('f_dep').value,
+    Rol: document.getElementById('f_rol').value,
+    Manager: document.getElementById('f_manager').value,
+    Activ: true
+  };
+  await withLock(async () => {
+    try{
+      await apiPost('addAngajat', payload);
+      closeModal();
+      showToast('Angajat adăugat');
+      await loadAll();
+      goView('echipa');
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+/* ---------------- init ---------------- */
+
+loadAll();
+</script>
+</body>
+</html>
+
