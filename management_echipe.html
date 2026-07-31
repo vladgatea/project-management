@@ -210,7 +210,10 @@ let ACTION_BUSY = false;
 function scriptUrl(){ return SCRIPT_URL_ECHIPE; }
 function meNume(){ return localStorage.getItem('echipe_whoami') || ''; }
 function meAngajat(){ return STATE.angajati.find(a => a.Nume === meNume()); }
-function isManager(){ const m = meAngajat(); return !!m && m.Rol === 'Manager'; }
+function isManager(){ const m = meAngajat(); return !!m && (m.Rol === 'Manager' || m.Rol === 'GM'); }
+function isGM(){ const m = meAngajat(); return !!m && m.Rol === 'GM'; }
+function myTeamNames(){ return STATE.angajati.filter(a => a.Manager === meNume()).map(a => a.Nume); }
+function scopeTasks(){ return isGM() ? STATE.taskuri : STATE.taskuri.filter(t => myTeamNames().includes(t.AngajatNume)); }
 
 async function withLock(fn){
   if(ACTION_BUSY){ showToast('Se procesează deja o acțiune — așteaptă puțin'); return; }
@@ -331,15 +334,15 @@ function renderDashboard(){
 
   let managerCards = '';
   if(isManager()){
-    const echipa = STATE.angajati.filter(a => a.Manager === meNume());
-    const echipaNumes = echipa.map(a=>a.Nume);
-    const taskuriEchipa = STATE.taskuri.filter(t => echipaNumes.includes(t.AngajatNume));
+    const gm = isGM();
+    const echipa = gm ? STATE.angajati.filter(a => a.Activ===true||a.Activ==='TRUE') : STATE.angajati.filter(a => a.Manager === meNume());
+    const taskuriEchipa = gm ? STATE.taskuri : scopeTasks();
     const deVerificat = taskuriEchipa.filter(t => t.Status === 'Trimis spre verificare');
     const intarziateEchipa = taskuriEchipa.filter(isOverdue);
     managerCards = `
-      <div class="stat-card gold"><div class="num">${deVerificat.length}</div><div class="lbl">de verificat (echipă)</div></div>
-      <div class="stat-card late"><div class="num">${intarziateEchipa.length}</div><div class="lbl">întârziate (echipă)</div></div>
-      <div class="stat-card"><div class="num">${echipa.length}</div><div class="lbl">oameni în echipă</div></div>`;
+      <div class="stat-card gold"><div class="num">${deVerificat.length}</div><div class="lbl">de verificat ${gm?'(companie)':'(echipă)'}</div></div>
+      <div class="stat-card late"><div class="num">${intarziateEchipa.length}</div><div class="lbl">întârziate ${gm?'(companie)':'(echipă)'}</div></div>
+      <div class="stat-card"><div class="num">${echipa.length}</div><div class="lbl">${gm?'angajați activi':'oameni în echipă'}</div></div>`;
   }
 
   document.getElementById('main').innerHTML = `
@@ -373,16 +376,18 @@ function renderTaskListView(title, tasks, mine){
 
 function renderAllTasks(){
   if(!isManager()){ goView('dashboard'); return; }
+  const gm = isGM();
   const deps = [...new Set(STATE.angajati.map(a=>a.Departament))].filter(Boolean);
   document.getElementById('main').innerHTML = `
     <div class="view-head"><h2 class="display">Toate taskurile</h2><button class="btn btn-primary" onclick="openModal('task')">+ Task nou</button></div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-10px;">${gm ? 'Vezi toate taskurile din companie.' : 'Vezi taskurile oamenilor din echipa ta directă.'}</p>
     <div class="filters">
       <select id="flt_dep" onchange="applyFilters()"><option value="">Toate departamentele</option>${deps.map(d=>`<option>${d}</option>`).join('')}</select>
       <select id="flt_status" onchange="applyFilters()"><option value="">Toate statusurile</option>${TASK_STATUSES.map(s=>`<option>${s}</option>`).join('')}</select>
       <select id="flt_prio" onchange="applyFilters()"><option value="">Toate prioritățile</option>${PRIORITATI.map(p=>`<option>${p}</option>`).join('')}</select>
       <input id="flt_search" placeholder="Caută titlu / responsabil…" oninput="applyFilters()">
     </div>
-    <div id="allTasksTable">${taskTable(STATE.taskuri, false)}</div>
+    <div id="allTasksTable">${taskTable(scopeTasks(), false)}</div>
   `;
 }
 
@@ -391,7 +396,7 @@ function applyFilters(){
   const status = document.getElementById('flt_status').value;
   const prio = document.getElementById('flt_prio').value;
   const q = document.getElementById('flt_search').value.trim().toLowerCase();
-  let list = STATE.taskuri.filter(t =>
+  let list = scopeTasks().filter(t =>
     (!dep || t.Departament === dep) &&
     (!status || t.Status === status) &&
     (!prio || t.Prioritate === prio) &&
@@ -573,8 +578,8 @@ function modalTask(){
       </div>
       <div class="field"><label>Responsabili</label><div class="checkbox-grid">${angajatiOptions([meNume()])}</div></div>
       <div class="field-row">
-        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${todayStr()}"></div>
-        <div class="field"><label>Deadline</label><input id="f_deadline" type="date" value="${todayStr()}"></div>
+        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${todayStr()}" onchange="syncDeadlineMin()"></div>
+        <div class="field"><label>Deadline</label><input id="f_deadline" type="date" value="${todayStr()}" min="${todayStr()}"></div>
       </div>
       <div class="field">
         <label>Repetitivitate</label>
@@ -605,6 +610,14 @@ function onRepetChange(){
   document.getElementById('repetHint').style.display = v ? 'block' : 'none';
 }
 
+function syncDeadlineMin(){
+  const start = document.getElementById('f_start').value;
+  const dl = document.getElementById('f_deadline');
+  if(!start) return;
+  dl.min = start;
+  if(dl.value && dl.value < start) dl.value = start; // impinge automat deadline-ul dupa noua data de start
+}
+
 const ZILE_RO_BACKEND = ["Duminica","Luni","Marti","Miercuri","Joi","Vineri","Sambata"]; // indexat ca Date.getDay()
 
 async function submitTask(){
@@ -615,6 +628,11 @@ async function submitTask(){
   const dep = document.getElementById('f_dep').value;
   const dataStart = document.getElementById('f_start').value;
   const repet = document.getElementById('f_repet').value;
+  const deadlineVal = document.getElementById('f_deadline').value;
+  if(!repet && deadlineVal && dataStart && deadlineVal < dataStart){
+    showToast('Deadline-ul nu poate fi înainte de Data start');
+    return;
+  }
 
   const base = {
     Titlu: titlu,
@@ -674,7 +692,7 @@ function modalTaskDetail(taskId){
   if(!t) return `<div class="modal"><p>Task negăsit.</p><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div></div>`;
   const comentarii = STATE.comentarii.filter(c => c.TaskID === taskId).sort((a,b)=>(a.DataOra||'').localeCompare(b.DataOra||''));
   const amIOwner = t.AngajatNume === meNume();
-  const amIManager = t.ManagerNume === meNume() || isManager();
+  const amIManager = t.ManagerNume === meNume() || isGM();
 
   let actions = '';
   if(amIOwner){
@@ -892,7 +910,7 @@ async function submitSablon(){
 
 function modalAngajat(editId){
   const deps = [...new Set(STATE.departamente.map(d=>d.Nume))];
-  const manageri = STATE.angajati.filter(a => a.Rol === 'Manager');
+  const manageri = STATE.angajati.filter(a => a.Rol === 'Manager' || a.Rol === 'GM');
   const a = editId ? STATE.angajati.find(x => x.ID === editId) : null;
   return `
     <div class="modal">
@@ -900,7 +918,7 @@ function modalAngajat(editId){
       <div class="field"><label>Nume</label><input id="f_nume" placeholder="Nume complet" value="${a?escapeHtml(a.Nume):''}"></div>
       <div class="field-row">
         <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option ${a&&a.Departament===d?'selected':''}>${d}</option>`).join('')}</select></div>
-        <div class="field"><label>Rol</label><select id="f_rol"><option ${a&&a.Rol==='Angajat'?'selected':''}>Angajat</option><option ${a&&a.Rol==='Manager'?'selected':''}>Manager</option></select></div>
+        <div class="field"><label>Rol</label><select id="f_rol"><option ${a&&a.Rol==='Angajat'?'selected':''}>Angajat</option><option ${a&&a.Rol==='Manager'?'selected':''}>Manager</option><option ${a&&a.Rol==='GM'?'selected':''}>GM</option></select></div>
       </div>
       <div class="field"><label>Manager direct (opțional)</label>
         <select id="f_manager"><option value="">— fără —</option>${manageri.filter(m=>!a||m.ID!==a.ID).map(m=>`<option ${a&&a.Manager===m.Nume?'selected':''}>${escapeHtml(m.Nume)}</option>`).join('')}</select>
