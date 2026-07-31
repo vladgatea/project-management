@@ -128,15 +128,25 @@
   .sub-progress > span{ display:block; height:100%; background:var(--gold); }
 
   .task-list{ display:flex; flex-direction:column; padding:6px 8px; gap:2px; }
-  .task-row{ display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; padding:9px 10px; border-radius:8px; }
+  .task-row{ display:grid; grid-template-columns:1fr auto; gap:6px; align-items:center; padding:9px 10px; border-radius:8px; cursor:pointer; }
   .task-row:hover{ background:var(--bg); }
   .task-main{ min-width:0; }
   .task-name{ font-size:13px; font-weight:600; line-height:1.3; }
+  .result-dot{ color:var(--gold); font-size:10px; margin-left:2px; }
   .task-meta{ font-size:11px; color:var(--ink-soft); margin-top:2px; display:flex; gap:8px; flex-wrap:wrap; }
   .task-meta .overdue{ color:var(--late); font-weight:600; }
-  .task-status-select{ font-size:11px; font-weight:700; border-radius:999px; padding:4px 8px; border:1px solid transparent; text-transform:uppercase; letter-spacing:.03em; appearance:none; text-align:center; }
-  .sub-card-foot{ padding:10px 12px 14px; }
+  .sub-card-foot{ padding:10px 12px 14px; display:flex; gap:8px; }
+  .sub-card-foot .btn{ flex:1; }
   .no-tasks{ font-size:12px; color:var(--ink-soft); padding:16px 10px; text-align:center; }
+
+  /* ---------- sabloane (templates) ---------- */
+  .sablon-card{ border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
+  .sablon-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:14px; }
+  .sablon-task-row{ display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:8px; padding:6px 4px; font-size:13px; border-bottom:1px solid var(--bg); }
+  .sablon-task-dep{ font-size:11px; color:var(--ink-soft); background:var(--bg); padding:2px 8px; border-radius:999px; }
+  .sablon-add-row{ display:flex; gap:6px; margin-top:10px; }
+  .sablon-add-row input{ flex:2; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:12.5px; }
+  .sablon-add-row select{ flex:1; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:12.5px; }
 
   /* ---------- modal ---------- */
   .overlay{ position:fixed; inset:0; background:rgba(20,26,24,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; }
@@ -175,6 +185,7 @@
     </div>
 
     <button class="btn btn-primary btn-block" onclick="openModal('proiect')">+ Proiect nou</button>
+    <button class="btn btn-ghost btn-block" onclick="openModal('sabloaneManager')">📋 Șabloane task-uri</button>
 
     <div class="proj-list" id="projList"></div>
 
@@ -217,7 +228,7 @@ const STATUS_COLOR = {
   "Finalizat":"var(--gold)"
 };
 
-let STATE = { proiecte:[], subproiecte:[], taskuri:[] };
+let STATE = { proiecte:[], subproiecte:[], taskuri:[], sabloane:[], sabloaneTaskuri:[] };
 let selectedProjectId = null;
 
 function scriptUrl(){ return localStorage.getItem('mp_script_url') || SCRIPT_URL_DEFAULT; }
@@ -271,6 +282,16 @@ async function selectProject(id){
 function subsOf(pid){ return STATE.subproiecte.filter(s => s.ProiectID === pid); }
 function tasksOf(sid){ return STATE.taskuri.filter(t => t.SubproiectID === sid); }
 function tasksOfProject(pid){ return STATE.taskuri.filter(t => t.ProiectID === pid); }
+function sablonItems(sablonId){
+  return STATE.sabloaneTaskuri
+    .filter(x => x.SablonID === sablonId)
+    .sort((a,b) => (Number(a.Ordine)||0) - (Number(b.Ordine)||0));
+}
+function toDateInput(d){
+  if(!d) return '';
+  const m = String(d).match(/^\d{4}-\d{2}-\d{2}/);
+  return m ? m[0] : '';
+}
 
 function progressFromTasks(tasks){
   if(!tasks.length) return 0;
@@ -421,44 +442,27 @@ function renderSubCard(s){
       </div>
       <div class="task-list">${rows}</div>
       <div class="sub-card-foot">
-        <button class="btn btn-ghost btn-sm btn-block" onclick="openModal('task','${s.ID}')">+ Task nou</button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('task','${s.ID}')">+ Task nou</button>
+        <button class="btn btn-ghost btn-sm" onclick="openModal('aplicaSablon','${s.ID}')">📋 Aplică șablon</button>
       </div>
     </div>`;
 }
 
 function renderTaskRow(t){
   const overdue = isOverdue(t.Deadline, t.Status);
-  const color = STATUS_COLOR[t.Status] || 'var(--planned)';
-  const soft = color.replace(')', '-soft)').replace('var(--','var(--');
+  const hasResult = t.Rezultat && String(t.Rezultat).trim();
   return `
-    <div class="task-row">
+    <div class="task-row" onclick="openModal('taskDetail','${t.ID}')">
       <div class="task-main">
-        <div class="task-name">${escapeHtml(t.Nume)}</div>
+        <div class="task-name">${escapeHtml(t.Nume)}${hasResult ? ' <span class="result-dot" title="Are rezultat completat">●</span>' : ''}</div>
         <div class="task-meta">
           <span>${escapeHtml(t.Responsabil||'—')}</span>
           <span>${escapeHtml(t.Departament||'')}</span>
           <span class="${overdue ? 'overdue' : ''}">${overdue ? '⚠ ' : ''}${fmtDate(t.Deadline)}</span>
         </div>
       </div>
-      <select class="task-status-select" style="color:${color};background:${statusBgVar(t.Status)}" onchange="quickUpdateTaskStatus('${t.ID}', this.value)">
-        ${TASK_STATUSES.map(s => `<option value="${s}" ${s===t.Status?'selected':''}>${s}</option>`).join('')}
-      </select>
+      <span class="status-pill ${statusClass(t.Status)}">${escapeHtml(t.Status||'')}</span>
     </div>`;
-}
-
-function statusBgVar(status){
-  const map = { 'In lucru':'var(--ok-soft)', 'De facut':'var(--planned-soft)', 'Blocat':'var(--late-soft)', 'Finalizat':'var(--gold-soft)' };
-  return map[status] || 'var(--planned-soft)';
-}
-
-/* ---------------- actions ---------------- */
-
-async function quickUpdateTaskStatus(taskId, newStatus){
-  try{
-    await apiPost('updateTask', { ID:taskId, Status:newStatus, Progres: PROGRESS_BY_STATUS[newStatus] });
-    showToast('Task actualizat');
-    await loadAll(true);
-  }catch(err){ showToast('Eroare: ' + err.message); }
 }
 
 function showToast(msg){
@@ -484,6 +488,12 @@ function openModal(type, subId){
     wrap.innerHTML = modalSubproiect();
   } else if(type === 'task'){
     wrap.innerHTML = modalTask(subId);
+  } else if(type === 'taskDetail'){
+    wrap.innerHTML = modalTaskDetail(subId);
+  } else if(type === 'sabloaneManager'){
+    wrap.innerHTML = modalSabloaneManager();
+  } else if(type === 'aplicaSablon'){
+    wrap.innerHTML = modalAplicaSablon(subId);
   }
   document.body.appendChild(wrap);
 }
@@ -614,6 +624,183 @@ async function submitTask(){
     await apiPost('addTask', payload);
     closeModal();
     showToast('Task creat');
+    await loadAll(true);
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+function modalTaskDetail(taskId){
+  const t = STATE.taskuri.find(x => x.ID === taskId);
+  if(!t) return `<div class="modal"><p>Task negăsit — probabil a fost șters de altcineva. Reîmprospătează pagina.</p><div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div></div>`;
+  return `
+    <div class="modal">
+      <h3 class="display">Detalii task</h3>
+      <div class="field"><label>Nume task</label><input id="f_nume" value="${escapeHtml(t.Nume)}"></div>
+      <div class="field-row">
+        <div class="field"><label>Responsabil</label><input id="f_resp" value="${escapeHtml(t.Responsabil||'')}"></div>
+        <div class="field"><label>Departament</label>
+          <select id="f_dep">${DEPARTAMENTE.map(d=>`<option ${d===t.Departament?'selected':''}>${d}</option>`).join('')}</select>
+        </div>
+      </div>
+      <div class="field-row">
+        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${toDateInput(t.DataStart)}"></div>
+        <div class="field"><label>Deadline</label><input id="f_deadline" type="date" value="${toDateInput(t.Deadline)}"></div>
+      </div>
+      <div class="field"><label>Status</label>
+        <select id="f_status">${TASK_STATUSES.map(s=>`<option ${s===t.Status?'selected':''}>${s}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Rezultat obținut</label><textarea id="f_rezultat" placeholder="Ce s-a obținut, concluzii, cifre...">${escapeHtml(t.Rezultat||'')}</textarea></div>
+      <div class="field"><label>Notă (opțional)</label><textarea id="f_note">${escapeHtml(t.Note||'')}</textarea></div>
+      <div class="modal-actions" style="justify-content:space-between;">
+        <button class="btn btn-ghost" style="color:var(--late);" onclick="submitDeleteTask('${t.ID}')">Șterge task</button>
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
+          <button class="btn btn-primary" onclick="submitTaskDetail('${t.ID}')">Salvează</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitTaskDetail(taskId){
+  const status = document.getElementById('f_status').value;
+  const payload = {
+    ID: taskId,
+    Nume: document.getElementById('f_nume').value.trim(),
+    Responsabil: document.getElementById('f_resp').value.trim(),
+    Departament: document.getElementById('f_dep').value,
+    DataStart: document.getElementById('f_start').value,
+    Deadline: document.getElementById('f_deadline').value,
+    Status: status,
+    Progres: PROGRESS_BY_STATUS[status],
+    Rezultat: document.getElementById('f_rezultat').value.trim(),
+    Note: document.getElementById('f_note').value.trim()
+  };
+  try{
+    await apiPost('updateTask', payload);
+    closeModal();
+    showToast('Task salvat');
+    await loadAll(true);
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+async function submitDeleteTask(taskId){
+  if(!confirm('Ștergi acest task definitiv?')) return;
+  try{
+    await apiPost('deleteTask', { ID: taskId });
+    closeModal();
+    showToast('Task șters');
+    await loadAll(true);
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+function modalSabloaneManager(){
+  const cards = STATE.sabloane.map(sb => {
+    const tasks = sablonItems(sb.ID);
+    const rows = tasks.map(it => `
+      <div class="sablon-task-row">
+        <span>${escapeHtml(it.Nume)}</span>
+        <span class="sablon-task-dep">${escapeHtml(it.Departament||'')}</span>
+        <button class="btn btn-ghost btn-sm" onclick="submitDeleteSablonTask('${it.ID}')">✕</button>
+      </div>`).join('') || `<p class="no-tasks">Niciun pas încă.</p>`;
+    return `
+      <div class="sablon-card">
+        <div class="sablon-card-head">
+          <b>${escapeHtml(sb.Nume)}</b>
+          <button class="btn btn-ghost btn-sm" style="color:var(--late);" onclick="submitDeleteSablon('${sb.ID}')">Șterge șablon</button>
+        </div>
+        ${rows}
+        <div class="sablon-add-row">
+          <input id="new_step_${sb.ID}" placeholder="Nume pas nou">
+          <select id="new_dep_${sb.ID}">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
+          <button class="btn btn-gold btn-sm" onclick="submitAddSablonTask('${sb.ID}')">+ Pas</button>
+        </div>
+      </div>`;
+  }).join('') || `<p class="no-tasks">Niciun șablon încă. Creează primul mai jos.</p>`;
+
+  return `
+    <div class="modal" style="max-width:560px;">
+      <h3 class="display">Șabloane de task-uri</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 16px;">Definește o singură dată pașii standard (ex: pentru un produs nou), apoi aplică-i pe orice subproiect cu un click.</p>
+      ${cards}
+      <div class="field-row" style="margin-top:6px;align-items:flex-end;">
+        <div class="field" style="margin-bottom:0;"><label>Șablon nou</label><input id="f_sablon_nume" placeholder="ex: Produs nou"></div>
+        <button class="btn btn-primary btn-sm" onclick="submitAddSablon()">Creează</button>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div>
+    </div>`;
+}
+
+async function submitAddSablon(){
+  const nume = document.getElementById('f_sablon_nume').value.trim();
+  if(!nume){ showToast('Numele șablonului e obligatoriu'); return; }
+  try{
+    await apiPost('addSablon', { Nume: nume });
+    showToast('Șablon creat');
+    await loadAll(true);
+    openModal('sabloaneManager');
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+async function submitAddSablonTask(sablonId){
+  const nameInput = document.getElementById('new_step_'+sablonId);
+  const nume = nameInput.value.trim();
+  if(!nume){ showToast('Numele pasului e obligatoriu'); return; }
+  const dep = document.getElementById('new_dep_'+sablonId).value;
+  const ordine = sablonItems(sablonId).length + 1;
+  try{
+    await apiPost('addSablonTask', { SablonID: sablonId, Nume: nume, Departament: dep, Ordine: ordine });
+    await loadAll(true);
+    openModal('sabloaneManager');
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+async function submitDeleteSablonTask(id){
+  try{
+    await apiPost('deleteSablonTask', { ID: id });
+    await loadAll(true);
+    openModal('sabloaneManager');
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+async function submitDeleteSablon(id){
+  if(!confirm('Ștergi șablonul și toți pașii lui? Task-urile deja create pe subproiecte nu sunt afectate.')) return;
+  try{
+    await apiPost('deleteSablon', { ID: id });
+    await loadAll(true);
+    openModal('sabloaneManager');
+  }catch(err){ showToast('Eroare: ' + err.message); }
+}
+
+function modalAplicaSablon(subId){
+  const options = STATE.sabloane.map(sb => {
+    const n = sablonItems(sb.ID).length;
+    return `<button class="btn btn-block" style="justify-content:space-between;margin-bottom:8px;" onclick="submitAplicaSablon('${sb.ID}','${subId}')"><span>${escapeHtml(sb.Nume)}</span><span style="color:var(--ink-soft);font-weight:400;">${n} pași</span></button>`;
+  }).join('') || `<p class="no-tasks">Niciun șablon creat încă. Creează unul din „📋 Șabloane task-uri” în bara laterală.</p>`;
+  return `
+    <div class="modal">
+      <h3 class="display">Aplică șablon</h3>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-8px;">Se creează automat un task nou în acest subproiect pentru fiecare pas din șablonul ales.</p>
+      ${options}
+      <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Anulează</button></div>
+    </div>`;
+}
+
+async function submitAplicaSablon(sablonId, subId){
+  const items = sablonItems(sablonId);
+  if(!items.length){ showToast('Șablonul nu are pași'); return; }
+  try{
+    for(const it of items){
+      await apiPost('addTask', {
+        SubproiectID: subId,
+        ProiectID: selectedProjectId,
+        Nume: it.Nume,
+        Departament: it.Departament,
+        Responsabil: '',
+        Status: 'De facut',
+        Progres: 0
+      });
+    }
+    closeModal();
+    showToast('Șablon aplicat — ' + items.length + ' taskuri create');
     await loadAll(true);
   }catch(err){ showToast('Eroare: ' + err.message); }
 }
