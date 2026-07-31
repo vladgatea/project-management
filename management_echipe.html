@@ -213,7 +213,17 @@ function meAngajat(){ return STATE.angajati.find(a => a.Nume === meNume()); }
 function isManager(){ const m = meAngajat(); return !!m && (m.Rol === 'Manager' || m.Rol === 'GM'); }
 function isGM(){ const m = meAngajat(); return !!m && m.Rol === 'GM'; }
 function myTeamNames(){ return STATE.angajati.filter(a => a.Manager === meNume()).map(a => a.Nume); }
-function scopeTasks(){ return isGM() ? STATE.taskuri : STATE.taskuri.filter(t => myTeamNames().includes(t.AngajatNume)); }
+function myExtraDeps(){
+  const m = meAngajat();
+  if(!m || !m.AcceseExtra) return [];
+  return String(m.AcceseExtra).split(',').map(s => s.trim()).filter(Boolean);
+}
+function scopeTasks(){
+  if(isGM()) return STATE.taskuri;
+  const teamNames = myTeamNames();
+  const extraDeps = myExtraDeps();
+  return STATE.taskuri.filter(t => teamNames.includes(t.AngajatNume) || extraDeps.includes(t.Departament));
+}
 
 async function withLock(fn){
   if(ACTION_BUSY){ showToast('Se procesează deja o acțiune — așteaptă puțin'); return; }
@@ -377,10 +387,16 @@ function renderTaskListView(title, tasks, mine){
 function renderAllTasks(){
   if(!isManager()){ goView('dashboard'); return; }
   const gm = isGM();
+  const extra = myExtraDeps();
   const deps = [...new Set(STATE.angajati.map(a=>a.Departament))].filter(Boolean);
+  let scopeNote = 'Vezi toate taskurile din companie.';
+  if(!gm){
+    scopeNote = 'Vezi taskurile oamenilor din echipa ta directă';
+    scopeNote += extra.length ? `, plus toate taskurile din: ${extra.join(', ')}.` : '.';
+  }
   document.getElementById('main').innerHTML = `
     <div class="view-head"><h2 class="display">Toate taskurile</h2><button class="btn btn-primary" onclick="openModal('task')">+ Task nou</button></div>
-    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-10px;">${gm ? 'Vezi toate taskurile din companie.' : 'Vezi taskurile oamenilor din echipa ta directă.'}</p>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-10px;">${scopeNote}</p>
     <div class="filters">
       <select id="flt_dep" onchange="applyFilters()"><option value="">Toate departamentele</option>${deps.map(d=>`<option>${d}</option>`).join('')}</select>
       <select id="flt_status" onchange="applyFilters()"><option value="">Toate statusurile</option>${TASK_STATUSES.map(s=>`<option>${s}</option>`).join('')}</select>
@@ -463,7 +479,7 @@ function renderSetari(){
     <div class="admin-row"><span>${escapeHtml(d.Nume)}</span></div>`).join('') || `<p style="font-size:12.5px;color:var(--ink-soft);">Niciun departament.</p>`;
   const angajati = [...STATE.angajati].sort((a,b)=>(a.Departament||'').localeCompare(b.Departament||'') || a.Nume.localeCompare(b.Nume)).map(a => `
     <div class="admin-row ${(a.Activ===false||a.Activ==='FALSE')?'inactive':''}">
-      <span style="cursor:pointer;" onclick="openModal('editAngajat','${a.ID}')" title="Click pentru a edita">${escapeHtml(a.Nume)} <span class="tag">${escapeHtml(a.Departament||'')}</span> <span class="tag">${escapeHtml(a.Rol||'')}</span></span>
+      <span style="cursor:pointer;" onclick="openModal('editAngajat','${a.ID}')" title="Click pentru a edita">${escapeHtml(a.Nume)} <span class="tag">${escapeHtml(a.Departament||'')}</span> <span class="tag">${escapeHtml(a.Rol||'')}</span>${myAcceseExtraList(a).length?` <span class="tag" style="background:var(--gold-soft);color:var(--gold);">+ ${myAcceseExtraList(a).join(', ')}</span>`:''}</span>
       <span style="display:flex;gap:6px;">
         <button class="btn btn-ghost btn-sm" onclick="openModal('editAngajat','${a.ID}')">Editează</button>
         <button class="btn btn-ghost btn-sm" onclick="toggleActivAngajat('${a.ID}', ${a.Activ===false||a.Activ==='FALSE'})">${(a.Activ===false||a.Activ==='FALSE')?'Reactivează':'Dezactivează'}</button>
@@ -923,6 +939,13 @@ function modalAngajat(editId){
       <div class="field"><label>Manager direct (opțional)</label>
         <select id="f_manager"><option value="">— fără —</option>${manageri.filter(m=>!a||m.ID!==a.ID).map(m=>`<option ${a&&a.Manager===m.Nume?'selected':''}>${escapeHtml(m.Nume)}</option>`).join('')}</select>
       </div>
+      <div class="field">
+        <label>Acces suplimentar la alte departamente (opțional)</label>
+        <p style="font-size:11px;color:var(--ink-soft);margin:0 0 6px;">Util pentru manageri interdepartamentali — ex. un manager de Vânzări care vede și taskurile de la Marketing. Nu are efect pentru rolul Angajat.</p>
+        <div class="checkbox-grid" style="max-height:140px;">
+          ${deps.map(d => `<label><input type="checkbox" value="${escapeHtml(d)}" ${a&&myAcceseExtraList(a).includes(d)?'checked':''}> ${escapeHtml(d)}</label>`).join('')}
+        </div>
+      </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
         <button class="btn btn-gold" onclick="submitAngajat('${editId||''}')">Salvează</button>
@@ -930,14 +953,18 @@ function modalAngajat(editId){
     </div>`;
 }
 
+function myAcceseExtraList(a){ return a && a.AcceseExtra ? String(a.AcceseExtra).split(',').map(s=>s.trim()).filter(Boolean) : []; }
+
 async function submitAngajat(editId){
   const nume = document.getElementById('f_nume').value.trim();
   if(!nume){ showToast('Numele e obligatoriu'); return; }
+  const acceseExtra = Array.from(document.querySelectorAll('.checkbox-grid input:checked')).map(c => c.value).join(',');
   const payload = {
     Nume: nume,
     Departament: document.getElementById('f_dep').value,
     Rol: document.getElementById('f_rol').value,
-    Manager: document.getElementById('f_manager').value
+    Manager: document.getElementById('f_manager').value,
+    AcceseExtra: acceseExtra
   };
   await withLock(async () => {
     try{
