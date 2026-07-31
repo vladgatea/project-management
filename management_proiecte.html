@@ -142,7 +142,10 @@
   /* ---------- sabloane (templates) ---------- */
   .sablon-card{ border:1px solid var(--line); border-radius:12px; padding:14px; margin-bottom:12px; }
   .sablon-card-head{ display:flex; justify-content:space-between; align-items:center; margin-bottom:10px; font-size:14px; }
-  .sablon-task-row{ display:grid; grid-template-columns:1fr auto auto; align-items:center; gap:8px; padding:6px 4px; font-size:13px; border-bottom:1px solid var(--bg); }
+  .sablon-task-row{ display:grid; grid-template-columns:18px 1fr auto auto; align-items:center; gap:8px; padding:7px 4px; font-size:13px; border-bottom:1px solid var(--bg); border-radius:6px; }
+  .sablon-task-row.dragging{ opacity:.35; background:var(--gold-soft); }
+  .drag-handle{ cursor:grab; color:var(--ink-soft); font-size:14px; text-align:center; user-select:none; }
+  .drag-handle:active{ cursor:grabbing; }
   .sablon-task-dep{ font-size:11px; color:var(--ink-soft); background:var(--bg); padding:2px 8px; border-radius:999px; }
   .sablon-add-row{ display:flex; gap:6px; margin-top:10px; }
   .sablon-add-row input{ flex:2; border:1px solid var(--line); border-radius:8px; padding:7px 9px; font-size:12.5px; }
@@ -696,7 +699,9 @@ function modalSabloaneManager(){
   const cards = STATE.sabloane.map(sb => {
     const tasks = sablonItems(sb.ID);
     const rows = tasks.map(it => `
-      <div class="sablon-task-row">
+      <div class="sablon-task-row" draggable="true" data-id="${it.ID}" data-sablon="${sb.ID}"
+           ondragstart="handleDragStart(event)" ondragover="handleDragOver(event)" ondragend="handleDragEnd(event)">
+        <span class="drag-handle">⠿</span>
         <span>${escapeHtml(it.Nume)}</span>
         <span class="sablon-task-dep">${escapeHtml(it.Departament||'')}</span>
         <button class="btn btn-ghost btn-sm" onclick="submitDeleteSablonTask('${it.ID}')">✕</button>
@@ -707,7 +712,7 @@ function modalSabloaneManager(){
           <b>${escapeHtml(sb.Nume)}</b>
           <button class="btn btn-ghost btn-sm" style="color:var(--late);" onclick="submitDeleteSablon('${sb.ID}')">Șterge șablon</button>
         </div>
-        ${rows}
+        <div class="sablon-rows" id="rows_${sb.ID}">${rows}</div>
         <div class="sablon-add-row">
           <input id="new_step_${sb.ID}" placeholder="Nume pas nou">
           <select id="new_dep_${sb.ID}">${DEPARTAMENTE.map(d=>`<option>${d}</option>`).join('')}</select>
@@ -719,7 +724,7 @@ function modalSabloaneManager(){
   return `
     <div class="modal" style="max-width:560px;">
       <h3 class="display">Șabloane de task-uri</h3>
-      <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 16px;">Definește o singură dată pașii standard (ex: pentru un produs nou), apoi aplică-i pe orice subproiect cu un click.</p>
+      <p style="font-size:12.5px;color:var(--ink-soft);margin:-8px 0 16px;">Definește o singură dată pașii standard (ex: pentru un produs nou), apoi aplică-i pe orice subproiect cu un click. Trage de ⠿ ca să schimbi ordinea.</p>
       ${cards}
       <div class="field-row" style="margin-top:6px;align-items:flex-end;">
         <div class="field" style="margin-bottom:0;"><label>Șablon nou</label><input id="f_sablon_nume" placeholder="ex: Produs nou"></div>
@@ -727,6 +732,45 @@ function modalSabloaneManager(){
       </div>
       <div class="modal-actions"><button class="btn btn-ghost" onclick="closeModal()">Închide</button></div>
     </div>`;
+}
+
+let dragState = { draggedId:null, sablonId:null };
+
+function handleDragStart(e){
+  const row = e.currentTarget;
+  dragState.draggedId = row.dataset.id;
+  dragState.sablonId = row.dataset.sablon;
+  row.classList.add('dragging');
+  e.dataTransfer.effectAllowed = 'move';
+  e.dataTransfer.setData('text/plain', row.dataset.id);
+}
+
+function handleDragOver(e){
+  e.preventDefault();
+  const row = e.currentTarget;
+  if(row.dataset.id === dragState.draggedId) return;
+  const dragged = document.querySelector('.sablon-task-row[data-id="'+dragState.draggedId+'"]');
+  if(!dragged) return;
+  const rect = row.getBoundingClientRect();
+  const before = (e.clientY - rect.top) < rect.height / 2;
+  row.parentNode.insertBefore(dragged, before ? row : row.nextSibling);
+}
+
+async function handleDragEnd(e){
+  e.currentTarget.classList.remove('dragging');
+  const sablonId = dragState.sablonId;
+  dragState = { draggedId:null, sablonId:null };
+  if(!sablonId) return;
+  const container = document.getElementById('rows_'+sablonId);
+  if(!container) return;
+  const ids = Array.from(container.children).map(el => el.dataset.id).filter(Boolean);
+  try{
+    for(let i = 0; i < ids.length; i++){
+      await apiPost('updateSablonTask', { ID: ids[i], Ordine: i + 1 });
+    }
+    await loadAll(true);
+    openModal('sabloaneManager');
+  }catch(err){ showToast('Eroare la reordonare: ' + err.message); }
 }
 
 async function submitAddSablon(){
