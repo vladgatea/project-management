@@ -57,6 +57,23 @@
   .stat-card.ok .num{ color:var(--ok); }
   .stat-card.gold .num{ color:var(--gold); }
 
+  .week-board{ display:grid; grid-template-columns:repeat(7,1fr); gap:10px; margin-bottom:26px; }
+  .week-col{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:10px; min-height:110px; box-shadow:var(--shadow); }
+  .week-col.is-today{ border-color:var(--gold); background:var(--gold-soft); }
+  .week-col.is-weekend{ opacity:.7; }
+  .week-col-head{ font-size:11px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); text-align:center; margin-bottom:8px; }
+  .week-col.is-today .week-col-head{ color:var(--gold); }
+  .week-col-head span{ display:block; font-size:13px; font-weight:600; color:var(--ink); margin-top:2px; }
+  .week-col.is-today .week-col-head span{ color:var(--gold); }
+  .week-col-body{ display:flex; flex-direction:column; gap:5px; }
+  .week-task{ font-size:11px; font-weight:600; padding:5px 7px; border-radius:6px; background:var(--bg); cursor:pointer; line-height:1.3; }
+  .week-task:hover{ background:var(--line); }
+  .week-task.status-Blocat{ background:var(--late-soft); color:var(--late); }
+  .week-task.status-Trimis-spre-verificare{ background:var(--risk-soft); color:var(--risk); }
+  .week-task.status-Aprobat{ background:var(--gold-soft); color:var(--gold); }
+  .week-empty{ font-size:11px; color:var(--ink-soft); text-align:center; display:block; padding:6px 0; }
+  @media (max-width:900px){ .week-board{ grid-template-columns:repeat(7,minmax(80px,1fr)); overflow-x:auto; } }
+
   .filters{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
   .filters select, .filters input{ border:1px solid var(--line); border-radius:8px; padding:7px 10px; font-size:12.5px; background:var(--surface); }
 
@@ -184,6 +201,7 @@ const TIPURI_RECURENTA = [
   { v:"Lunar", l:"Lunar (o zi fixă)" }
 ];
 const ZILE_SAPT = ["Luni","Marti","Miercuri","Joi","Vineri","Sambata","Duminica"];
+const ZILE_SAPT_SCURT = ["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"]; // indexat ca Date.getDay() (0=Duminica)
 
 let STATE = { departamente:[], angajati:[], taskuri:[], sabloane:[], comentarii:[], notificari:[] };
 let CURRENT_VIEW = 'dashboard';
@@ -257,6 +275,34 @@ function isOverdue(t){ return t.Deadline && String(t.Deadline).slice(0,10) < tod
 function myTasksList(){ return STATE.taskuri.filter(t => t.AngajatNume === meNume()); }
 function showToast(msg){ const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2400); }
 
+function startOfWeek(offsetWeeks){
+  const d = new Date();
+  const day = d.getDay(); // 0=Duminica..6=Sambata
+  const diffLaLuni = (day === 0 ? -6 : 1 - day);
+  d.setDate(d.getDate() + diffLaLuni + (offsetWeeks||0) * 7);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function renderWeekBoard(tasks){
+  const monday = startOfWeek(0);
+  const azi = todayStr();
+  const cols = [];
+  for(let i = 0; i < 7; i++){
+    const d = new Date(monday); d.setDate(d.getDate() + i);
+    const dStr = d.toISOString().slice(0,10);
+    const dayTasks = tasks.filter(t => t.Deadline && String(t.Deadline).slice(0,10) === dStr);
+    const isToday = dStr === azi;
+    const isWeekend = d.getDay() === 0 || d.getDay() === 6;
+    cols.push(`
+      <div class="week-col ${isToday?'is-today':''} ${isWeekend?'is-weekend':''}">
+        <div class="week-col-head">${ZILE_SAPT_SCURT[d.getDay()]}<span>${d.getDate()}/${d.getMonth()+1}</span></div>
+        <div class="week-col-body">${dayTasks.map(t => `<div class="week-task ${statusClass(t.Status)}" onclick="openModal('taskDetail','${t.ID}')" title="${escapeHtml(t.Titlu)}">${escapeHtml(t.Titlu)}</div>`).join('') || '<span class="week-empty">—</span>'}</div>
+      </div>`);
+  }
+  return `<div class="week-board">${cols.join('')}</div>`;
+}
+
 /* ---------------- render router ---------------- */
 
 function render(){
@@ -309,6 +355,8 @@ function renderDashboard(){
       <div class="stat-card gold"><div class="num">${asteapta.length}</div><div class="lbl">în așteptare verificare</div></div>
       ${managerCards}
     </div>
+    <h3 class="display" style="font-size:16px;margin-bottom:10px;">Săptămâna aceasta</h3>
+    ${renderWeekBoard(mine)}
     <h3 class="display" style="font-size:16px;margin-bottom:10px;">Taskurile mele active</h3>
     ${taskTable(mine.filter(t => !['Aprobat','Anulat'].includes(t.Status)), true)}
   `;
@@ -528,6 +576,16 @@ function modalTask(){
         <div class="field"><label>Data start</label><input id="f_start" type="date" value="${todayStr()}"></div>
         <div class="field"><label>Deadline</label><input id="f_deadline" type="date" value="${todayStr()}"></div>
       </div>
+      <div class="field">
+        <label>Repetitivitate</label>
+        <select id="f_repet" onchange="onRepetChange()">
+          <option value="">Fără repetare — task unic</option>
+          <option value="Zilnic">Zilnic (Luni–Vineri, fără weekend)</option>
+          <option value="Saptamanal">Săptămânal — în aceeași zi ca „Data start”</option>
+          <option value="Lunar">Lunar — în aceeași zi a lunii ca „Data start”</option>
+        </select>
+        <p id="repetHint" style="font-size:11px;color:var(--ink-soft);margin:5px 0 0;display:none;">Se va crea un șablon recurent; instanțele viitoare apar automat, cu câteva zile în avans.</p>
+      </div>
       <div class="field-row">
         <div class="field"><label>Ora limită</label><input id="f_ora" type="time" value="18:00"></div>
         <div class="field"><label>Estimare (ore)</label><input id="f_estimare" type="number" min="0" step="0.5"></div>
@@ -542,36 +600,70 @@ function modalTask(){
     </div>`;
 }
 
+function onRepetChange(){
+  const v = document.getElementById('f_repet').value;
+  document.getElementById('repetHint').style.display = v ? 'block' : 'none';
+}
+
+const ZILE_RO_BACKEND = ["Duminica","Luni","Marti","Miercuri","Joi","Vineri","Sambata"]; // indexat ca Date.getDay()
+
 async function submitTask(){
   const titlu = document.getElementById('f_titlu').value.trim();
   if(!titlu){ showToast('Titlul e obligatoriu'); return; }
   const checked = Array.from(document.querySelectorAll('.checkbox-grid input:checked'));
   if(!checked.length){ showToast('Alege cel puțin un responsabil'); return; }
   const dep = document.getElementById('f_dep').value;
+  const dataStart = document.getElementById('f_start').value;
+  const repet = document.getElementById('f_repet').value;
+
   const base = {
     Titlu: titlu,
     Descriere: document.getElementById('f_desc').value.trim(),
     Departament: dep,
     Prioritate: document.getElementById('f_prio').value,
-    DataStart: document.getElementById('f_start').value,
-    Deadline: document.getElementById('f_deadline').value,
     OraLimita: document.getElementById('f_ora').value,
-    EstimareOre: document.getElementById('f_estimare').value,
     Instructiuni: document.getElementById('f_instr').value.trim(),
-    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
-    NecesitaAprobare: document.getElementById('f_aprobare').checked,
-    Status: 'De facut',
-    CreatDe: meNume()
+    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim()
   };
+
   await withLock(async () => {
     try{
-      await Promise.all(checked.map(chk => apiPost('addTask', {
-        ...base,
-        AngajatNume: chk.value,
-        ManagerNume: chk.dataset.mgr || meNume()
-      })));
-      closeModal();
-      showToast('Task creat pentru ' + checked.length + ' persoană/e');
+      if(!repet){
+        // task unic, ca inainte
+        await Promise.all(checked.map(chk => apiPost('addTask', {
+          ...base,
+          DataStart: dataStart,
+          Deadline: document.getElementById('f_deadline').value,
+          EstimareOre: document.getElementById('f_estimare').value,
+          NecesitaAprobare: document.getElementById('f_aprobare').checked,
+          Status: 'De facut',
+          CreatDe: meNume(),
+          AngajatNume: chk.value,
+          ManagerNume: chk.dataset.mgr || meNume()
+        })));
+        closeModal();
+        showToast('Task creat pentru ' + checked.length + ' persoană/e');
+      } else {
+        // se creeaza un sablon recurent per responsabil; instantele se genereaza automat (azi + avans)
+        const dt = new Date(dataStart || todayStr());
+        const sablonPayload = {
+          ...base,
+          TipRecurenta: repet,
+          ZileSaptamana: repet === 'Saptamanal' ? ZILE_RO_BACKEND[dt.getDay()] : '',
+          ZiuaLunii: repet === 'Lunar' ? dt.getDate() : '',
+          DataStartRecurenta: dataStart || todayStr(),
+          ZileAvans: 3,
+          Activ: true
+        };
+        await Promise.all(checked.map(chk => apiPost('addSablon', {
+          ...sablonPayload,
+          AngajatNume: chk.value,
+          ManagerNume: chk.dataset.mgr || meNume()
+        })));
+        await apiPost('genereazaRecurente', {}); // populeaza imediat instantele din fereastra de avans
+        closeModal();
+        showToast('Task recurent creat pentru ' + checked.length + ' persoană/e');
+      }
       await loadAll();
     }catch(err){ showToast('Eroare: ' + err.message); }
   });
