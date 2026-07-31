@@ -96,8 +96,11 @@
   .field-row{ display:flex; gap:10px; } .field-row .field{ flex:1; }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
   .checkbox-row{ display:flex; align-items:center; gap:8px; font-size:13px; }
-  .checkbox-grid{ display:grid; grid-template-columns:repeat(2,1fr); gap:6px; max-height:180px; overflow-y:auto; border:1px solid var(--line); border-radius:9px; padding:10px; }
-  .checkbox-grid label{ display:flex; align-items:center; gap:6px; font-size:12.5px; font-weight:400; }
+  .checkbox-grid{ display:flex; flex-direction:column; gap:2px; max-height:240px; overflow-y:auto; border:1px solid var(--line); border-radius:9px; padding:6px; }
+  .checkbox-grid .dep-header{ font-size:10.5px; text-transform:uppercase; letter-spacing:.05em; color:var(--ink-soft); font-weight:700; padding:8px 8px 4px; }
+  .checkbox-grid label{ display:flex; align-items:center; gap:8px; font-size:13px; font-weight:400; padding:7px 8px; border-radius:7px; }
+  .checkbox-grid label:hover{ background:var(--bg); }
+  .checkbox-grid input{ width:auto; flex-shrink:0; }
   .day-toggle{ display:flex; gap:6px; flex-wrap:wrap; }
   .day-toggle button{ border:1px solid var(--line); background:var(--surface); border-radius:8px; padding:6px 10px; font-size:12px; }
   .day-toggle button.on{ background:var(--ink); color:#fff; border-color:var(--ink); }
@@ -155,8 +158,8 @@
     <button class="nav-item" data-view="myTasks" onclick="goView('myTasks')">✅ Taskurile mele</button>
     <button class="nav-item" data-view="allTasks" onclick="goView('allTasks')">📋 Toate taskurile</button>
     <button class="nav-item" data-view="sabloane" onclick="goView('sabloane')">🔁 Taskuri recurente</button>
-    <button class="nav-item" data-view="echipa" onclick="goView('echipa')">👥 Echipă &amp; departamente</button>
     <button class="nav-item" data-view="notificari" onclick="goView('notificari')">🔔 Notificări <span class="nav-badge" id="notifBadge" style="display:none;"></span></button>
+    <button class="nav-item" data-view="setari" onclick="goView('setari')">⚙️ Setări</button>
   </aside>
 
   <main class="main" id="main">
@@ -234,7 +237,7 @@ function goView(v){ CURRENT_VIEW = v; renderNav(); render(); }
 function renderNav(){
   document.querySelectorAll('.nav-item').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.view === CURRENT_VIEW);
-    if(['allTasks','sabloane','echipa'].includes(btn.dataset.view)){
+    if(['allTasks','sabloane','setari'].includes(btn.dataset.view)){
       btn.style.display = isManager() ? '' : 'none';
     }
   });
@@ -265,7 +268,7 @@ function render(){
   if(CURRENT_VIEW === 'myTasks') return renderTaskListView('Taskurile mele', myTasksList(), true);
   if(CURRENT_VIEW === 'allTasks') return renderAllTasks();
   if(CURRENT_VIEW === 'sabloane') return renderSabloane();
-  if(CURRENT_VIEW === 'echipa') return renderEchipa();
+  if(CURRENT_VIEW === 'setari') return renderSetari();
   if(CURRENT_VIEW === 'notificari') return renderNotificari();
 }
 
@@ -399,20 +402,24 @@ async function submitDeleteSablon(id){
   });
 }
 
-/* ---------------- echipa & departamente ---------------- */
+/* ---------------- setari: echipa & departamente ---------------- */
 
-function renderEchipa(){
+function renderSetari(){
   if(!isManager()){ goView('dashboard'); return; }
   const deps = STATE.departamente.map(d => `
     <div class="admin-row"><span>${escapeHtml(d.Nume)}</span></div>`).join('') || `<p style="font-size:12.5px;color:var(--ink-soft);">Niciun departament.</p>`;
-  const angajati = [...STATE.angajati].sort((a,b)=>a.Nume.localeCompare(b.Nume)).map(a => `
+  const angajati = [...STATE.angajati].sort((a,b)=>(a.Departament||'').localeCompare(b.Departament||'') || a.Nume.localeCompare(b.Nume)).map(a => `
     <div class="admin-row ${(a.Activ===false||a.Activ==='FALSE')?'inactive':''}">
-      <span>${escapeHtml(a.Nume)} <span class="tag">${escapeHtml(a.Departament||'')}</span> <span class="tag">${escapeHtml(a.Rol||'')}</span></span>
-      <button class="btn btn-ghost btn-sm" onclick="toggleActivAngajat('${a.ID}', ${a.Activ===false||a.Activ==='FALSE'})">${(a.Activ===false||a.Activ==='FALSE')?'Reactivează':'Dezactivează'}</button>
+      <span style="cursor:pointer;" onclick="openModal('editAngajat','${a.ID}')" title="Click pentru a edita">${escapeHtml(a.Nume)} <span class="tag">${escapeHtml(a.Departament||'')}</span> <span class="tag">${escapeHtml(a.Rol||'')}</span></span>
+      <span style="display:flex;gap:6px;">
+        <button class="btn btn-ghost btn-sm" onclick="openModal('editAngajat','${a.ID}')">Editează</button>
+        <button class="btn btn-ghost btn-sm" onclick="toggleActivAngajat('${a.ID}', ${a.Activ===false||a.Activ==='FALSE'})">${(a.Activ===false||a.Activ==='FALSE')?'Reactivează':'Dezactivează'}</button>
+      </span>
     </div>`).join('');
 
   document.getElementById('main').innerHTML = `
-    <div class="view-head"><h2 class="display">Echipă &amp; departamente</h2></div>
+    <div class="view-head"><h2 class="display">Setări · Echipă &amp; departamente</h2></div>
+    <p style="font-size:12.5px;color:var(--ink-soft);margin-top:-10px;">Click pe un angajat ca să-i schimbi departamentul, rolul sau managerul direct.</p>
     <div class="admin-grid">
       <div class="admin-card">
         <h3>Departamente</h3>
@@ -434,14 +441,14 @@ async function submitAddDepartament(){
   const nume = document.getElementById('newDepNume').value.trim();
   if(!nume){ showToast('Numele departamentului e obligatoriu'); return; }
   await withLock(async () => {
-    try{ await apiPost('addDepartament', { Nume: nume }); showToast('Departament adăugat'); await loadAll(); goView('echipa'); }
+    try{ await apiPost('addDepartament', { Nume: nume }); showToast('Departament adăugat'); await loadAll(); goView('setari'); }
     catch(err){ showToast('Eroare: ' + err.message); }
   });
 }
 
 async function toggleActivAngajat(id, reactivate){
   await withLock(async () => {
-    try{ await apiPost('updateAngajat', { ID:id, Activ: !!reactivate }); await loadAll(); goView('echipa'); }
+    try{ await apiPost('updateAngajat', { ID:id, Activ: !!reactivate }); await loadAll(); goView('setari'); }
     catch(err){ showToast('Eroare: ' + err.message); }
   });
 }
@@ -490,11 +497,18 @@ function openModal(type, arg){
   else if(type === 'taskDetail') openModalWrap(modalTaskDetail(arg));
   else if(type === 'sablon') openModalWrap(modalSablon());
   else if(type === 'angajat') openModalWrap(modalAngajat());
+  else if(type === 'editAngajat') openModalWrap(modalAngajat(arg));
 }
 
 function angajatiOptions(selected){
-  const sorted = [...STATE.angajati].filter(a=>a.Activ===true||a.Activ==='TRUE').sort((a,b)=>a.Nume.localeCompare(b.Nume));
-  return sorted.map(a => `<label><input type="checkbox" value="${escapeHtml(a.Nume)}" data-dep="${escapeHtml(a.Departament)}" data-mgr="${escapeHtml(a.Manager||'')}" ${selected&&selected.includes(a.Nume)?'checked':''}> ${escapeHtml(a.Nume)}</label>`).join('');
+  const sorted = [...STATE.angajati].filter(a=>a.Activ===true||a.Activ==='TRUE').sort((a,b)=>(a.Departament||'').localeCompare(b.Departament||'') || a.Nume.localeCompare(b.Nume));
+  let lastDep = null;
+  let out = '';
+  sorted.forEach(a => {
+    if(a.Departament !== lastDep){ out += `<div class="dep-header">${escapeHtml(a.Departament||'Fără departament')}</div>`; lastDep = a.Departament; }
+    out += `<label><input type="checkbox" value="${escapeHtml(a.Nume)}" data-dep="${escapeHtml(a.Departament)}" data-mgr="${escapeHtml(a.Manager||'')}" ${selected&&selected.includes(a.Nume)?'checked':''}> ${escapeHtml(a.Nume)}</label>`;
+  });
+  return out;
 }
 
 function modalTask(){
@@ -733,6 +747,7 @@ function modalSablon(){
         <div class="field"><label>Start recurență</label><input id="f_startrec" type="date" value="${todayStr()}"></div>
         <div class="field"><label>Final (opțional)</label><input id="f_finalrec" type="date"></div>
       </div>
+      <div class="field"><label>Cu câte zile înainte apare la angajat</label><input id="f_zileavans" type="number" min="0" max="30" value="3"></div>
       <div class="field"><label>Instrucțiuni</label><textarea id="f_instr"></textarea></div>
       <div class="field"><label>Rezultat așteptat</label><input id="f_rezasteptat"></div>
       <div class="modal-actions">
@@ -767,6 +782,7 @@ async function submitSablon(){
     ZiuaLunii: document.getElementById('f_ziua').value,
     DataStartRecurenta: document.getElementById('f_startrec').value,
     DataFinalRecurenta: document.getElementById('f_finalrec').value,
+    ZileAvans: document.getElementById('f_zileavans').value,
     Instructiuni: document.getElementById('f_instr').value.trim(),
     RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
     Activ: true
@@ -782,44 +798,49 @@ async function submitSablon(){
   });
 }
 
-function modalAngajat(){
+function modalAngajat(editId){
   const deps = [...new Set(STATE.departamente.map(d=>d.Nume))];
   const manageri = STATE.angajati.filter(a => a.Rol === 'Manager');
+  const a = editId ? STATE.angajati.find(x => x.ID === editId) : null;
   return `
     <div class="modal">
-      <h3 class="display">Angajat nou</h3>
-      <div class="field"><label>Nume</label><input id="f_nume" placeholder="Nume complet"></div>
+      <h3 class="display">${a ? 'Editează angajat' : 'Angajat nou'}</h3>
+      <div class="field"><label>Nume</label><input id="f_nume" placeholder="Nume complet" value="${a?escapeHtml(a.Nume):''}"></div>
       <div class="field-row">
-        <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option>${d}</option>`).join('')}</select></div>
-        <div class="field"><label>Rol</label><select id="f_rol"><option>Angajat</option><option>Manager</option></select></div>
+        <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option ${a&&a.Departament===d?'selected':''}>${d}</option>`).join('')}</select></div>
+        <div class="field"><label>Rol</label><select id="f_rol"><option ${a&&a.Rol==='Angajat'?'selected':''}>Angajat</option><option ${a&&a.Rol==='Manager'?'selected':''}>Manager</option></select></div>
       </div>
       <div class="field"><label>Manager direct (opțional)</label>
-        <select id="f_manager"><option value="">— fără —</option>${manageri.map(m=>`<option>${escapeHtml(m.Nume)}</option>`).join('')}</select>
+        <select id="f_manager"><option value="">— fără —</option>${manageri.filter(m=>!a||m.ID!==a.ID).map(m=>`<option ${a&&a.Manager===m.Nume?'selected':''}>${escapeHtml(m.Nume)}</option>`).join('')}</select>
       </div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
-        <button class="btn btn-gold" onclick="submitAngajat()">Salvează</button>
+        <button class="btn btn-gold" onclick="submitAngajat('${editId||''}')">Salvează</button>
       </div>
     </div>`;
 }
 
-async function submitAngajat(){
+async function submitAngajat(editId){
   const nume = document.getElementById('f_nume').value.trim();
   if(!nume){ showToast('Numele e obligatoriu'); return; }
   const payload = {
     Nume: nume,
     Departament: document.getElementById('f_dep').value,
     Rol: document.getElementById('f_rol').value,
-    Manager: document.getElementById('f_manager').value,
-    Activ: true
+    Manager: document.getElementById('f_manager').value
   };
   await withLock(async () => {
     try{
-      await apiPost('addAngajat', payload);
+      if(editId){
+        await apiPost('updateAngajat', { ID: editId, ...payload });
+        showToast('Angajat actualizat');
+      } else {
+        await apiPost('addAngajat', { ...payload, Activ: true });
+        showToast('Angajat adăugat');
+      }
       closeModal();
-      showToast('Angajat adăugat');
       await loadAll();
-      goView('echipa');
+      goView('setari');
     }catch(err){ showToast('Eroare: ' + err.message); }
   });
 }
