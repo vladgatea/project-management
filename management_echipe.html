@@ -602,10 +602,21 @@ function modalTask(){
         <select id="f_repet" onchange="onRepetChange()">
           <option value="">Fără repetare — task unic</option>
           <option value="Zilnic">Zilnic (Luni–Vineri, fără weekend)</option>
-          <option value="Saptamanal">Săptămânal — în aceeași zi ca „Data start”</option>
-          <option value="Lunar">Lunar — în aceeași zi a lunii ca „Data start”</option>
+          <option value="Saptamanal">Săptămânal — o zi fixă din săptămână</option>
+          <option value="Lunar">Lunar — o zi fixă a lunii</option>
         </select>
-        <p id="repetHint" style="font-size:11px;color:var(--ink-soft);margin:5px 0 0;display:none;">Se va crea un șablon recurent; instanțele viitoare apar automat, cu câteva zile în avans.</p>
+        <div id="repetZiuaSaptBox" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;">În ce zi a săptămânii</label>
+          <select id="f_repetziua_sapt">${ZILE_SAPT.map(z=>`<option>${z}</option>`).join('')}</select>
+        </div>
+        <div id="repetZiuaLuniiBox" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;">În ce zi a lunii (1-31)</label>
+          <input id="f_repetziua_lunii" type="number" min="1" max="31" value="1">
+        </div>
+        <div id="repetHint" style="display:none;margin-top:8px;">
+          <label style="font-size:11px;">Se repetă până la (opțional — dacă nu pui nimic, apare mereu cu 3 zile în avans)</label>
+          <input id="f_repetfinal" type="date">
+        </div>
       </div>
       <div class="field-row">
         <div class="field"><label>Ora limită</label><input id="f_ora" type="time" value="18:00"></div>
@@ -624,6 +635,8 @@ function modalTask(){
 function onRepetChange(){
   const v = document.getElementById('f_repet').value;
   document.getElementById('repetHint').style.display = v ? 'block' : 'none';
+  document.getElementById('repetZiuaSaptBox').style.display = (v === 'Saptamanal') ? 'block' : 'none';
+  document.getElementById('repetZiuaLuniiBox').style.display = (v === 'Lunar') ? 'block' : 'none';
 }
 
 function syncDeadlineMin(){
@@ -678,15 +691,22 @@ async function submitTask(){
         closeModal();
         showToast('Task creat pentru ' + checked.length + ' persoană/e');
       } else {
-        // se creeaza un sablon recurent per responsabil; instantele se genereaza automat (azi + avans)
+        // se creeaza un sablon recurent per responsabil; instantele se genereaza automat
         const dt = new Date(dataStart || todayStr());
+        const repetFinal = document.getElementById('f_repetfinal').value;
+        let zileAvans = 3; // implicit, daca nu se stie cat tine perioada
+        if(repetFinal){
+          const diffZile = Math.round((new Date(repetFinal) - dt) / 86400000);
+          if(diffZile > 0) zileAvans = Math.min(diffZile, 180);
+        }
         const sablonPayload = {
           ...base,
           TipRecurenta: repet,
-          ZileSaptamana: repet === 'Saptamanal' ? ZILE_RO_BACKEND[dt.getDay()] : '',
-          ZiuaLunii: repet === 'Lunar' ? dt.getDate() : '',
+          ZileSaptamana: repet === 'Saptamanal' ? document.getElementById('f_repetziua_sapt').value : '',
+          ZiuaLunii: repet === 'Lunar' ? document.getElementById('f_repetziua_lunii').value : '',
           DataStartRecurenta: dataStart || todayStr(),
-          ZileAvans: 3,
+          DataFinalRecurenta: repetFinal || '',
+          ZileAvans: zileAvans,
           Activ: true
         };
         await Promise.all(checked.map(chk => apiPost('addSablon', {
@@ -870,10 +890,12 @@ function modalSablon(){
       </div>
       <div class="field" id="ziuaLuniiBox" style="display:none;"><label>Ziua lunii (1-31)</label><input id="f_ziua" type="number" min="1" max="31"></div>
       <div class="field-row">
-        <div class="field"><label>Start recurență</label><input id="f_startrec" type="date" value="${todayStr()}"></div>
-        <div class="field"><label>Final (opțional)</label><input id="f_finalrec" type="date"></div>
+        <div class="field"><label>Start recurență</label><input id="f_startrec" type="date" value="${todayStr()}" onchange="syncZileAvans()"></div>
+        <div class="field"><label>Final (opțional)</label><input id="f_finalrec" type="date" onchange="syncZileAvans()"></div>
       </div>
-      <div class="field"><label>Cu câte zile înainte apare la angajat</label><input id="f_zileavans" type="number" min="0" max="30" value="3"></div>
+      <div class="field"><label>Cu câte zile înainte apare la angajat</label><input id="f_zileavans" type="number" min="0" max="180" value="3">
+        <p style="font-size:11px;color:var(--ink-soft);margin:5px 0 0;">Se completează automat ca să cuprindă toată perioada de mai sus, dacă pui o dată de final — dar poți modifica manual.</p>
+      </div>
       <div class="field"><label>Instrucțiuni</label><textarea id="f_instr"></textarea></div>
       <div class="field"><label>Rezultat așteptat</label><input id="f_rezasteptat"></div>
       <div class="modal-actions">
@@ -889,6 +911,14 @@ function onTipRecurentaChange(){
   document.getElementById('ziuaLuniiBox').style.display = (v === 'Lunar') ? 'block' : 'none';
 }
 function toggleDay(btn){ btn.classList.toggle('on'); }
+
+function syncZileAvans(){
+  const start = document.getElementById('f_startrec').value;
+  const final = document.getElementById('f_finalrec').value;
+  if(!start || !final) return;
+  const diffZile = Math.round((new Date(final) - new Date(start)) / 86400000);
+  if(diffZile > 0) document.getElementById('f_zileavans').value = Math.min(diffZile, 180);
+}
 
 async function submitSablon(){
   const titlu = document.getElementById('f_titlu').value.trim();
