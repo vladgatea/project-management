@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="ro">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Calendar Promoții · Ferma cu Omenie</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#F3F3EE; --surface:#FFFFFF; --ink:#1F2C29; --ink-soft:#5C6B66; --line:#DEDDD2;
+    --gold:#AD8A34; --gold-soft:#F1E7CC;
+    --ok:#4C7A62; --ok-soft:#E4EEE8;
+    --risk:#C1762C; --risk-soft:#F5E7D6;
+    --late:#AE4B3E; --late-soft:#F5E1DD;
+    --plum:#7A5C7E; --plum-soft:#EFE5F0;
+    --blue:#4B6E82; --blue-soft:#E4EDF1;
+    --radius:14px; --shadow: 0 1px 2px rgba(31,44,41,.05), 0 6px 20px rgba(31,44,41,.06);
+  }
+  *{box-sizing:border-box;}
+  body{ margin:0; background:var(--bg); color:var(--ink); font-family:'Inter',system-ui,sans-serif; -webkit-font-smoothing:antialiased; }
+  h1,h2,h3,.display{ font-family:'Fraunces',serif; font-weight:600; letter-spacing:-.01em; }
+  button{ font-family:inherit; cursor:pointer; } input,select,textarea{ font-family:inherit; } a{ color:inherit; }
+
+  .app{ display:flex; min-height:100vh; }
+  .sidebar{ width:230px; flex-shrink:0; background:var(--surface); border-right:1px solid var(--line); padding:22px 14px; display:flex; flex-direction:column; gap:6px; }
+  .brand{ display:flex; flex-direction:column; gap:2px; padding:0 8px 14px; border-bottom:1px solid var(--line); margin-bottom:8px; }
+  .brand .eyebrow{ font-size:11px; text-transform:uppercase; letter-spacing:.12em; color:var(--gold); font-weight:600; }
+  .brand h1{ font-size:19px; margin:2px 0 0; }
+  .back-link{ font-size:11.5px; color:var(--ink-soft); text-decoration:none; margin-top:6px; display:inline-block; }
+
+  .canal-item{ display:flex; align-items:center; gap:10px; padding:12px 12px; border-radius:10px; font-size:14px; font-weight:600; color:var(--ink-soft); border:none; background:transparent; text-align:left; width:100%; }
+  .canal-item:hover{ background:var(--bg); color:var(--ink); }
+  .canal-item.active{ background:var(--gold-soft); color:var(--ink); border:1px solid var(--gold); }
+  .canal-item .icon{ font-size:18px; }
+  .canal-item .count{ margin-left:auto; font-size:11px; font-weight:700; color:var(--ink-soft); background:var(--bg); border-radius:999px; padding:2px 8px; }
+  .canal-item.active .count{ background:var(--gold); color:#fff; }
+
+  .main{ flex:1; min-width:0; padding:26px 34px 60px; }
+  .view-head{ display:flex; align-items:center; justify-content:space-between; margin-bottom:6px; flex-wrap:wrap; gap:10px; }
+  .view-head h2{ font-size:24px; margin:0; }
+  .view-sub{ color:var(--ink-soft); font-size:13px; margin:0 0 20px; }
+
+  .year-nav{ display:flex; align-items:center; gap:10px; }
+  .year-nav button{ border:1px solid var(--line); background:var(--surface); border-radius:8px; width:30px; height:30px; font-size:14px; }
+  .year-nav button:hover{ border-color:var(--gold); }
+  .year-nav .year{ font-family:'Fraunces',serif; font-weight:600; font-size:17px; min-width:52px; text-align:center; }
+
+  .empty-state{ display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px; padding:100px 20px; color:var(--ink-soft); text-align:center; }
+
+  /* ---------- gantt / timeline ---------- */
+  .gantt-wrap{ background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); box-shadow:var(--shadow); padding:20px 22px 10px; overflow-x:auto; margin-bottom:24px; }
+  .gantt-months{ display:grid; grid-template-columns:180px repeat(12,1fr); font-size:10.5px; font-weight:700; text-transform:uppercase; letter-spacing:.03em; color:var(--ink-soft); border-bottom:1px solid var(--line); padding-bottom:8px; margin-bottom:6px; min-width:920px; }
+  .gantt-months span{ text-align:center; }
+  .gantt-row{ display:grid; grid-template-columns:180px 1fr; align-items:center; min-width:920px; border-bottom:1px solid var(--bg); padding:9px 0; }
+  .gantt-row:last-child{ border-bottom:none; }
+  .gantt-label{ font-size:12.5px; font-weight:600; padding-right:10px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .gantt-label .sub{ display:block; font-size:10.5px; color:var(--ink-soft); font-weight:400; }
+  .gantt-track{ position:relative; height:30px; background:repeating-linear-gradient(to right, var(--line) 0, var(--line) 1px, transparent 1px, transparent calc(100%/12)); border-radius:6px; }
+  .gantt-bar{ position:absolute; top:2px; height:26px; border-radius:7px; cursor:pointer; display:flex; align-items:center; padding:0 10px; font-size:11.5px; font-weight:700; color:#fff; white-space:nowrap; overflow:hidden; box-shadow:0 2px 5px rgba(0,0,0,.12); }
+  .gantt-bar:hover{ filter:brightness(1.08); }
+  .gantt-today{ position:absolute; top:-4px; bottom:-4px; width:2px; background:var(--ink); z-index:5; }
+  .gantt-today::after{ content:'azi'; position:absolute; top:-15px; left:50%; transform:translateX(-50%); font-size:9px; color:var(--ink-soft); }
+  .no-promo{ padding:50px 20px; text-align:center; color:var(--ink-soft); font-size:13px; }
+
+  /* ---------- list / cards below ---------- */
+  .board-head{ display:flex; align-items:center; justify-content:space-between; margin:8px 0 14px; }
+  .promo-grid{ display:grid; grid-template-columns:repeat(auto-fill,minmax(260px,1fr)); gap:14px; }
+  .promo-card{ background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:14px 16px; box-shadow:var(--shadow); cursor:pointer; }
+  .promo-card:hover{ border-color:var(--gold); }
+  .promo-card .top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; margin-bottom:6px; }
+  .promo-card .produs{ font-weight:700; font-size:13.5px; }
+  .promo-card .discount{ font-size:12px; font-weight:800; color:#fff; padding:2px 9px; border-radius:999px; flex-shrink:0; }
+  .promo-card .dates{ font-size:11.5px; color:var(--ink-soft); }
+  .promo-card .desc{ font-size:11.5px; color:var(--ink-soft); margin-top:6px; }
+
+  .btn{ border:1px solid var(--line); background:var(--surface); color:var(--ink); border-radius:10px; padding:9px 14px; font-size:13.5px; font-weight:600; display:inline-flex; align-items:center; gap:8px; transition:.15s; }
+  .btn:hover{ border-color:var(--ink); }
+  .btn-primary{ background:var(--ink); color:#fff; border-color:var(--ink); } .btn-primary:hover{ background:#0f1917; }
+  .btn-gold{ background:var(--gold); color:#fff; border-color:var(--gold); } .btn-gold:hover{ background:#93752b; }
+  .btn-ghost{ border-color:transparent; background:transparent; } .btn-ghost:hover{ background:var(--bg); }
+  .btn-sm{ padding:6px 10px; font-size:12.5px; border-radius:8px; }
+
+  .overlay{ position:fixed; inset:0; background:rgba(20,26,24,.45); display:flex; align-items:center; justify-content:center; z-index:50; padding:20px; overflow-y:auto; }
+  .modal{ background:var(--surface); border-radius:16px; padding:26px; width:100%; max-width:460px; box-shadow:0 20px 60px rgba(0,0,0,.25); max-height:88vh; overflow-y:auto; }
+  .modal h3{ margin:0 0 16px; font-size:18px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:12px; font-weight:600; color:var(--ink-soft); margin-bottom:5px; }
+  .field input, .field select, .field textarea{ width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:13.5px; color:var(--ink); background:#fff; }
+  .field textarea{ resize:vertical; min-height:56px; }
+  .field-row{ display:flex; gap:10px; } .field-row .field{ flex:1; }
+  .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
+
+  .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; box-shadow:var(--shadow); z-index:100; opacity:0; transition:.25s; pointer-events:none; }
+  .toast.show{ opacity:1; }
+  body.busy .btn{ pointer-events:none; opacity:.5; cursor:wait; } body.busy{ cursor:wait; }
+
+  @media (max-width: 960px){
+    .app{ flex-direction:column; } .sidebar{ width:100%; border-right:none; border-bottom:1px solid var(--line); flex-direction:row; overflow-x:auto; }
+    .main{ padding:18px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="app">
+  <aside class="sidebar">
+    <div class="brand">
+      <span class="eyebrow">Ferma cu Omenie</span>
+      <h1>Calendar Promoții</h1>
+      <a class="back-link" href="index.html">← înapoi la selector</a>
+    </div>
+    <div id="canalList"></div>
+  </aside>
+
+  <main class="main" id="main">
+    <div class="empty-state"><h2 class="display">Se încarcă…</h2></div>
+  </main>
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* =========================================================
+   CONFIG — inlocuieste cu URL-ul tau de Apps Script Promotii (.../exec)
+   ========================================================= */
+const SCRIPT_URL_PROMOTII = "PASTE_YOUR_APPS_SCRIPT_PROMOTII_URL_HERE";
+
+const CANALE = [
+  { key: "Online", icon: "🛒" },
+  { key: "IKA", icon: "🏬" },
+  { key: "TT", icon: "🏪" },
+  { key: "Export", icon: "🌍" },
+  { key: "Magazine proprii", icon: "🏠" },
+];
+
+const LUNI = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Noi","Dec"];
+const BAR_COLORS = ["4C7A62","AD8A34","C1762C","AE4B3E","7A5C7E","4B6E82"]; // rotate per produs
+
+let STATE = { promotii: [] };
+let selectedCanal = CANALE[0].key;
+let viewYear = new Date().getFullYear();
+let ACTION_BUSY = false;
+
+function scriptUrl(){ return SCRIPT_URL_PROMOTII; }
+
+async function withLock(fn){
+  if(ACTION_BUSY){ showToast('Se procesează deja o acțiune — așteaptă puțin'); return; }
+  ACTION_BUSY = true; document.body.classList.add('busy');
+  try{ await fn(); } finally { ACTION_BUSY = false; document.body.classList.remove('busy'); }
+}
+
+async function apiGet(){
+  const res = await fetch(scriptUrl() + '?action=getAll');
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Eroare la citire');
+  return json.data;
+}
+async function apiPost(action, payload){
+  const res = await fetch(scriptUrl(), { method:'POST', body: JSON.stringify({ action, payload }) });
+  const json = await res.json();
+  if(!json.ok) throw new Error(json.error || 'Eroare la scriere');
+  return json;
+}
+
+async function loadAll(){
+  try{
+    STATE = await apiGet();
+    renderSidebar();
+    render();
+  }catch(err){
+    document.getElementById('main').innerHTML = `<div class="empty-state"><h2>Nu m-am putut conecta</h2><p>${escapeHtml(err.message)}</p><p style="font-size:12px">Verifică SCRIPT_URL_PROMOTII și că web app-ul e publicat cu acces "Anyone".</p></div>`;
+  }
+}
+
+function escapeHtml(s){ return String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDate(d){ if(!d) return '—'; const dt = new Date(d); if(isNaN(dt)) return d; return dt.toLocaleDateString('ro-RO',{day:'2-digit',month:'short',year:'numeric'}); }
+function showToast(msg){ const el = document.getElementById('toast'); el.textContent = msg; el.classList.add('show'); setTimeout(()=>el.classList.remove('show'),2400); }
+function colorForProdus(produs){
+  let hash = 0;
+  for(let i=0;i<produs.length;i++) hash = (hash*31 + produs.charCodeAt(i)) % BAR_COLORS.length;
+  return BAR_COLORS[Math.abs(hash) % BAR_COLORS.length];
+}
+function dayOfYear(dateStr){ const d = new Date(dateStr); const start = new Date(d.getFullYear(),0,1); return Math.floor((d - start)/86400000) + 1; }
+function isLeap(y){ return (y%4===0 && y%100!==0) || y%400===0; }
+function daysInYear(y){ return isLeap(y) ? 366 : 365; }
+
+function promotiiCanal(){
+  return STATE.promotii.filter(p => p.Canal === selectedCanal).sort((a,b) => (a.DataStart||'').localeCompare(b.DataStart||''));
+}
+
+function renderSidebar(){
+  document.getElementById('canalList').innerHTML = CANALE.map(c => {
+    const count = STATE.promotii.filter(p => p.Canal === c.key).length;
+    const active = c.key === selectedCanal ? 'active' : '';
+    return `<button class="canal-item ${active}" onclick="selectCanal('${c.key}')"><span class="icon">${c.icon}</span> ${c.key} <span class="count">${count}</span></button>`;
+  }).join('');
+}
+
+function selectCanal(key){ selectedCanal = key; renderSidebar(); render(); }
+function changeYear(delta){ viewYear += delta; render(); }
+
+function render(){
+  const list = promotiiCanal();
+  const canalInfo = CANALE.find(c => c.key === selectedCanal);
+
+  const yearList = list.filter(p => {
+    if(!p.DataStart || !p.DataFinal) return false;
+    const sy = new Date(p.DataStart).getFullYear(), ey = new Date(p.DataFinal).getFullYear();
+    return viewYear >= sy && viewYear <= ey;
+  });
+
+  const rows = yearList.map(p => {
+    const color = colorForProdus(p.Produs || '');
+    const startClip = new Date(p.DataStart) < new Date(viewYear,0,1) ? new Date(viewYear,0,1) : new Date(p.DataStart);
+    const endClip = new Date(p.DataFinal) > new Date(viewYear,11,31) ? new Date(viewYear,11,31) : new Date(p.DataFinal);
+    const totalDays = daysInYear(viewYear);
+    const leftPct = ((dayOfYear(startClip.toISOString().slice(0,10)) - 1) / totalDays) * 100;
+    const widthPct = Math.max(1.5, ((dayOfYear(endClip.toISOString().slice(0,10)) - dayOfYear(startClip.toISOString().slice(0,10)) + 1) / totalDays) * 100);
+    return `
+      <div class="gantt-row">
+        <div class="gantt-label">${escapeHtml(p.Produs)}<span class="sub">${escapeHtml(p.Discount||'')}</span></div>
+        <div class="gantt-track">
+          <div class="gantt-bar" style="left:${leftPct}%; width:${widthPct}%; background:#${color};" onclick="openModal('editPromo','${p.ID}')" title="${escapeHtml(p.Produs)} · ${fmtDate(p.DataStart)} – ${fmtDate(p.DataFinal)} · ${escapeHtml(p.Discount||'')}">${escapeHtml(p.Discount||p.Produs)}</div>
+        </div>
+      </div>`;
+  }).join('');
+
+  const todayMarker = (new Date().getFullYear() === viewYear)
+    ? `<div class="gantt-today" style="left:${((dayOfYear(new Date().toISOString().slice(0,10))-1)/daysInYear(viewYear))*100}%;"></div>` : '';
+
+  const cards = yearList.map(p => {
+    const color = colorForProdus(p.Produs || '');
+    return `
+      <div class="promo-card" onclick="openModal('editPromo','${p.ID}')">
+        <div class="top"><span class="produs">${escapeHtml(p.Produs)}</span><span class="discount" style="background:#${color};">${escapeHtml(p.Discount||'—')}</span></div>
+        <div class="dates">${fmtDate(p.DataStart)} → ${fmtDate(p.DataFinal)}</div>
+        ${p.Descriere ? `<div class="desc">${escapeHtml(p.Descriere)}</div>` : ''}
+      </div>`;
+  }).join('');
+
+  document.getElementById('main').innerHTML = `
+    <div class="view-head">
+      <div>
+        <h2 class="display">${canalInfo.icon} ${escapeHtml(selectedCanal)}</h2>
+        <p class="view-sub">Calendarul promoțiilor pentru acest canal.</p>
+      </div>
+      <div style="display:flex;gap:10px;align-items:center;">
+        <div class="year-nav">
+          <button onclick="changeYear(-1)">‹</button>
+          <span class="year">${viewYear}</span>
+          <button onclick="changeYear(1)">›</button>
+        </div>
+        <button class="btn btn-primary" onclick="openModal('newPromo')">+ Promoție nouă</button>
+      </div>
+    </div>
+
+    <div class="gantt-wrap">
+      <div class="gantt-months"><span></span>${LUNI.map(l=>`<span>${l}</span>`).join('')}</div>
+      <div style="position:relative;">
+        ${todayMarker}
+        ${rows || `<div class="no-promo">Nicio promoție în ${viewYear} pentru acest canal. Adaugă una din butonul de mai sus.</div>`}
+      </div>
+    </div>
+
+    <div class="board-head"><h3 class="display" style="font-size:16px;margin:0;">Toate promoțiile — ${escapeHtml(selectedCanal)}</h3></div>
+    <div class="promo-grid">${cards || `<p style="color:var(--ink-soft);font-size:13px;">Nimic de arătat.</p>`}</div>
+  `;
+}
+
+/* ---------------- modals ---------------- */
+
+function openModalWrap(html){
+  closeModal();
+  const wrap = document.createElement('div');
+  wrap.className = 'overlay'; wrap.id = 'overlay';
+  wrap.onclick = (e) => { if(e.target.id === 'overlay') closeModal(); };
+  wrap.innerHTML = html;
+  document.body.appendChild(wrap);
+}
+function closeModal(){ const el = document.getElementById('overlay'); if(el) el.remove(); }
+
+function openModal(type, arg){
+  if(type === 'newPromo') openModalWrap(modalPromo());
+  else if(type === 'editPromo') openModalWrap(modalPromo(arg));
+}
+
+function modalPromo(editId){
+  const p = editId ? STATE.promotii.find(x => x.ID === editId) : null;
+  return `
+    <div class="modal">
+      <h3 class="display">${p ? 'Editează promoție' : 'Promoție nouă'}</h3>
+      <div class="field"><label>Canal</label>
+        <select id="f_canal">${CANALE.map(c=>`<option ${((p&&p.Canal===c.key)||(!p&&c.key===selectedCanal))?'selected':''}>${c.key}</option>`).join('')}</select>
+      </div>
+      <div class="field"><label>Produs</label><input id="f_produs" placeholder="ex: Branza proaspata de vaca" value="${p?escapeHtml(p.Produs):''}"></div>
+      <div class="field-row">
+        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${p?p.DataStart:''}"></div>
+        <div class="field"><label>Data final</label><input id="f_final" type="date" value="${p?p.DataFinal:''}"></div>
+      </div>
+      <div class="field"><label>Discount</label><input id="f_discount" placeholder="ex: -20%" value="${p?escapeHtml(p.Discount||''):''}"></div>
+      <div class="field"><label>Descriere (opțional)</label><textarea id="f_desc">${p?escapeHtml(p.Descriere||''):''}</textarea></div>
+      <div class="modal-actions" style="justify-content:${p?'space-between':'flex-end'};">
+        ${p ? `<button class="btn btn-ghost" style="color:var(--late);" onclick="submitDeletePromo('${p.ID}')">Șterge</button>` : ''}
+        <div style="display:flex;gap:8px;">
+          <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
+          <button class="btn btn-primary" onclick="submitPromo('${editId||''}')">Salvează</button>
+        </div>
+      </div>
+    </div>`;
+}
+
+async function submitPromo(editId){
+  const produs = document.getElementById('f_produs').value.trim();
+  const start = document.getElementById('f_start').value;
+  const final = document.getElementById('f_final').value;
+  if(!produs){ showToast('Numele produsului e obligatoriu'); return; }
+  if(!start || !final){ showToast('Completează perioada promoției'); return; }
+  if(final < start){ showToast('Data final nu poate fi înainte de data start'); return; }
+  const payload = {
+    Canal: document.getElementById('f_canal').value,
+    Produs: produs,
+    DataStart: start,
+    DataFinal: final,
+    Discount: document.getElementById('f_discount').value.trim(),
+    Descriere: document.getElementById('f_desc').value.trim()
+  };
+  await withLock(async () => {
+    try{
+      if(editId){ await apiPost('updatePromotie', { ID: editId, ...payload }); showToast('Promoție actualizată'); }
+      else { await apiPost('addPromotie', payload); showToast('Promoție creată'); }
+      closeModal();
+      selectedCanal = payload.Canal;
+      await loadAll();
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+async function submitDeletePromo(id){
+  if(!confirm('Ștergi această promoție?')) return;
+  await withLock(async () => {
+    try{
+      await apiPost('deletePromotie', { ID: id });
+      closeModal();
+      showToast('Promoție ștearsă');
+      await loadAll();
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+/* ---------------- init ---------------- */
+loadAll();
+</script>
+</body>
+</html>
