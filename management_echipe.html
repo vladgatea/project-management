@@ -528,9 +528,11 @@ function renderNotificari(){
   const mine = STATE.notificari.filter(n => n.Destinatar === meNume()).sort((a,b) => (b.DataOra||'').localeCompare(a.DataOra||''));
   const rows = mine.map(n => {
     const unread = n.Citit !== true && n.Citit !== 'TRUE';
+    const task = n.TaskID ? STATE.taskuri.find(t => t.ID === n.TaskID) : null;
+    const statusBadge = task ? `<span class="status-pill ${statusClass(task.Status)}" style="margin-left:8px;">${escapeHtml(task.Status)}</span>` : '';
     return `<div class="notif-item ${unread?'unread':''}" onclick="openNotificare('${n.ID}','${n.TaskID||''}')">
       <div style="flex:1;">
-        <div>${escapeHtml(n.Mesaj)}</div>
+        <div>${escapeHtml(n.Mesaj)}${statusBadge}</div>
         <div class="when">${fmtDate(n.DataOra)}</div>
       </div>
     </div>`;
@@ -575,9 +577,15 @@ function angajatiOptions(selected){
   let out = '';
   sorted.forEach(a => {
     if(a.Departament !== lastDep){ out += `<div class="dep-header">${escapeHtml(a.Departament||'Fără departament')}</div>`; lastDep = a.Departament; }
-    out += `<label><input type="checkbox" value="${escapeHtml(a.Nume)}" data-dep="${escapeHtml(a.Departament)}" data-mgr="${escapeHtml(a.Manager||'')}" ${selected&&selected.includes(a.Nume)?'checked':''}> ${escapeHtml(a.Nume)}</label>`;
+    out += `<label><input type="checkbox" value="${escapeHtml(a.Nume)}" data-dep="${escapeHtml(a.Departament)}" data-mgr="${escapeHtml(a.Manager||'')}" onchange="syncDepFromResponsabil(this)" ${selected&&selected.includes(a.Nume)?'checked':''}> ${escapeHtml(a.Nume)}</label>`;
   });
   return out;
+}
+
+function syncDepFromResponsabil(checkbox){
+  if(!checkbox.checked) return;
+  const depSel = document.getElementById('f_dep');
+  if(depSel && checkbox.dataset.dep) depSel.value = checkbox.dataset.dep;
 }
 
 function modalTask(){
