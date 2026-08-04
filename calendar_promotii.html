@@ -89,6 +89,8 @@
   .field input, .field select, .field textarea{ width:100%; border:1px solid var(--line); border-radius:9px; padding:9px 11px; font-size:13.5px; color:var(--ink); background:#fff; }
   .field textarea{ resize:vertical; min-height:56px; }
   .field-row{ display:flex; gap:10px; } .field-row .field{ flex:1; }
+  .add-inline-box{ display:none; margin-top:8px; padding:10px; border:1px solid var(--line); border-radius:8px; background:var(--bg); }
+  .add-inline-box input{ width:100%; border:1px solid var(--line); border-radius:8px; padding:8px 10px; font-size:12.5px; margin-bottom:8px; }
   .modal-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top:18px; }
 
   .toast{ position:fixed; bottom:22px; left:50%; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 18px; border-radius:10px; font-size:13px; box-shadow:var(--shadow); z-index:100; opacity:0; transition:.25s; pointer-events:none; }
@@ -137,7 +139,7 @@ const CANALE = [
 const LUNI = ["Ian","Feb","Mar","Apr","Mai","Iun","Iul","Aug","Sep","Oct","Noi","Dec"];
 const BAR_COLORS = ["4C7A62","AD8A34","C1762C","AE4B3E","7A5C7E","4B6E82"]; // rotate per produs
 
-let STATE = { promotii: [] };
+let STATE = { promotii: [], produse: [] };
 let selectedCanal = CANALE[0].key;
 let viewYear = new Date().getFullYear();
 let ACTION_BUSY = false;
@@ -285,6 +287,51 @@ function openModal(type, arg){
   else if(type === 'editPromo') openModalWrap(modalPromo(arg));
 }
 
+function produsOptions(selected){
+  const sorted = [...STATE.produse].sort((a,b) => a.Nume.localeCompare(b.Nume));
+  let opts = `<option value="">— alege articol —</option>`;
+  if(selected && !sorted.some(p => p.Nume === selected)){
+    opts += `<option value="${escapeHtml(selected)}" selected>${escapeHtml(selected)} (necatalogat)</option>`;
+  }
+  opts += sorted.map(p => `<option value="${escapeHtml(p.Nume)}" ${p.Nume===selected?'selected':''}>${escapeHtml(p.Nume)}</option>`).join('');
+  return opts;
+}
+
+function toggleAddProdus(){
+  const box = document.getElementById('addProdusBox');
+  if(box) box.style.display = box.style.display === 'none' ? 'block' : 'none';
+}
+
+async function submitAddProdus(){
+  const input = document.getElementById('newProdusNume');
+  const nume = input.value.trim();
+  if(!nume){ showToast('Numele articolului e obligatoriu'); return; }
+  await withLock(async () => {
+    try{
+      const r = await apiPost('addProdus', { Nume: nume });
+      STATE.produse.push({ ID: r.id, Nume: nume });
+      const sel = document.getElementById('f_produs');
+      if(sel){
+        const opt = document.createElement('option');
+        opt.value = nume; opt.textContent = nume;
+        sel.appendChild(opt);
+        sel.value = nume;
+      }
+      input.value = '';
+      document.getElementById('addProdusBox').style.display = 'none';
+      showToast('Articol adăugat: ' + nume);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
+}
+
+function syncFinalMin(){
+  const start = document.getElementById('f_start').value;
+  const final = document.getElementById('f_final');
+  if(!start) return;
+  final.min = start;
+  if(final.value && final.value < start) final.value = start;
+}
+
 function modalPromo(editId){
   const p = editId ? STATE.promotii.find(x => x.ID === editId) : null;
   return `
@@ -293,10 +340,21 @@ function modalPromo(editId){
       <div class="field"><label>Canal</label>
         <select id="f_canal">${CANALE.map(c=>`<option ${((p&&p.Canal===c.key)||(!p&&c.key===selectedCanal))?'selected':''}>${c.key}</option>`).join('')}</select>
       </div>
-      <div class="field"><label>Produs</label><input id="f_produs" placeholder="ex: Branza proaspata de vaca" value="${p?escapeHtml(p.Produs):''}"></div>
+      <div class="field">
+        <label>Articol</label>
+        <select id="f_produs">${produsOptions(p?p.Produs:'')}</select>
+        <button type="button" class="btn btn-ghost btn-sm" style="margin-top:6px;" onclick="toggleAddProdus()">+ Articol nou</button>
+        <div id="addProdusBox" class="add-inline-box">
+          <input id="newProdusNume" placeholder="Nume articol nou">
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="btn btn-ghost btn-sm" onclick="toggleAddProdus()">Anulează</button>
+            <button type="button" class="btn btn-gold btn-sm" onclick="submitAddProdus()">Salvează articol</button>
+          </div>
+        </div>
+      </div>
       <div class="field-row">
-        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${p?p.DataStart:''}"></div>
-        <div class="field"><label>Data final</label><input id="f_final" type="date" value="${p?p.DataFinal:''}"></div>
+        <div class="field"><label>Data start</label><input id="f_start" type="date" value="${p?p.DataStart:''}" onchange="syncFinalMin()"></div>
+        <div class="field"><label>Data final</label><input id="f_final" type="date" value="${p?p.DataFinal:''}" min="${p?p.DataStart:''}"></div>
       </div>
       <div class="field"><label>Discount</label><input id="f_discount" placeholder="ex: -20%" value="${p?escapeHtml(p.Discount||''):''}"></div>
       <div class="field"><label>Descriere (opțional)</label><textarea id="f_desc">${p?escapeHtml(p.Descriere||''):''}</textarea></div>
@@ -314,7 +372,7 @@ async function submitPromo(editId){
   const produs = document.getElementById('f_produs').value.trim();
   const start = document.getElementById('f_start').value;
   const final = document.getElementById('f_final').value;
-  if(!produs){ showToast('Numele produsului e obligatoriu'); return; }
+  if(!produs){ showToast('Alege sau adaugă un articol'); return; }
   if(!start || !final){ showToast('Completează perioada promoției'); return; }
   if(final < start){ showToast('Data final nu poate fi înainte de data start'); return; }
   const payload = {
