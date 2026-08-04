@@ -70,7 +70,7 @@
   .week-task:hover{ background:var(--line); }
   .week-task.status-Blocat{ background:var(--late-soft); color:var(--late); }
   .week-task.status-Trimis-spre-verificare{ background:var(--risk-soft); color:var(--risk); }
-  .week-task.status-Aprobat{ background:var(--gold-soft); color:var(--gold); }
+  .week-task.status-Aprobat{ background:var(--ok-soft); color:var(--ok); }
   .week-empty{ font-size:11px; color:var(--ink-soft); text-align:center; display:block; padding:6px 0; }
   @media (max-width:900px){ .week-board{ grid-template-columns:repeat(7,minmax(80px,1fr)); overflow-x:auto; } }
 
@@ -206,6 +206,9 @@ const ZILE_SAPT_SCURT = ["Dum","Lun","Mar","Mie","Joi","Vin","Sâm"]; // indexat
 let STATE = { departamente:[], angajati:[], taskuri:[], sabloane:[], comentarii:[], notificari:[] };
 let CURRENT_VIEW = 'dashboard';
 let ACTION_BUSY = false;
+let dashDayDate = todayStr();
+let dashHistFrom = '';
+let dashHistTo = '';
 
 function scriptUrl(){ return SCRIPT_URL_ECHIPE; }
 function meNume(){ return localStorage.getItem('echipe_whoami') || ''; }
@@ -333,6 +336,82 @@ function render(){
 
 /* ---------------- dashboard ---------------- */
 
+function dayStatusColor(status){
+  if(status === 'Aprobat') return { bg:'var(--ok-soft)', fg:'var(--ok)' };
+  if(status === 'Respins' || status === 'Blocat') return { bg:'var(--late-soft)', fg:'var(--late)' };
+  if(status === 'Trimis spre verificare') return { bg:'var(--risk-soft)', fg:'var(--risk)' };
+  if(status === 'In lucru') return { bg:'var(--gold-soft)', fg:'var(--gold)' };
+  return { bg:'var(--planned-soft)', fg:'var(--planned)' }; // De facut / altele
+}
+
+function onEchipaZiChange(v){ dashDayDate = v; render(); }
+function onEchipaIstoricCheck(){
+  dashHistFrom = document.getElementById('echipaIstoricFrom').value;
+  dashHistTo = document.getElementById('echipaIstoricTo').value;
+  render();
+}
+
+function renderEchipaActivitate(){
+  const scope = scopeTasks(); // taskurile echipei (sau ale companiei, pentru GM)
+
+  const dayTasks = scope.filter(t => t.Deadline && String(t.Deadline).slice(0,10) === dashDayDate);
+  const dayRows = dayTasks.map(t => {
+    const c = dayStatusColor(t.Status);
+    return `<tr class="clickable" onclick="openModal('taskDetail','${t.ID}')">
+      <td>${escapeHtml(t.AngajatNume||'—')}</td>
+      <td class="t-title">${escapeHtml(t.Titlu)}</td>
+      <td>${escapeHtml(t.Departament||'')}</td>
+      <td><span class="status-pill" style="background:${c.bg};color:${c.fg};">${escapeHtml(t.Status||'')}</span></td>
+    </tr>`;
+  }).join('');
+
+  let istoricBlock = '';
+  if(dashHistFrom && dashHistTo){
+    const inRange = scope.filter(t => t.Deadline && String(t.Deadline).slice(0,10) >= dashHistFrom && String(t.Deadline).slice(0,10) <= dashHistTo);
+    const finalizate = inRange.filter(t => t.Status === 'Aprobat').length;
+    const total = inRange.length;
+    const pct = total ? Math.round(finalizate/total*100) : 0;
+    const rows = [...inRange].sort((a,b)=>(a.Deadline||'').localeCompare(b.Deadline||'')).map(t => {
+      const c = dayStatusColor(t.Status);
+      return `<tr class="clickable" onclick="openModal('taskDetail','${t.ID}')">
+        <td>${fmtDate(t.Deadline)}</td>
+        <td>${escapeHtml(t.AngajatNume||'—')}</td>
+        <td class="t-title">${escapeHtml(t.Titlu)}</td>
+        <td><span class="status-pill" style="background:${c.bg};color:${c.fg};">${escapeHtml(t.Status||'')}</span></td>
+      </tr>`;
+    }).join('');
+    istoricBlock = `
+      <div class="cards" style="margin:0 0 14px;">
+        <div class="stat-card"><div class="num">${total}</div><div class="lbl">taskuri în perioadă</div></div>
+        <div class="stat-card ok"><div class="num">${finalizate}</div><div class="lbl">finalizate</div></div>
+        <div class="stat-card gold"><div class="num">${pct}%</div><div class="lbl">grad de realizare</div></div>
+      </div>
+      <table class="task-table">
+        <thead><tr><th>Deadline</th><th>Angajat</th><th>Titlu</th><th>Status</th></tr></thead>
+        <tbody>${rows || `<tr><td class="empty-row" colspan="4">Niciun task în perioada aleasă.</td></tr>`}</tbody>
+      </table>`;
+  }
+
+  return `
+    <h3 class="display" style="font-size:16px;margin:24px 0 10px;">Activitatea echipei — pe zi</h3>
+    <div class="filters">
+      <input type="date" id="echipaZi" value="${dashDayDate}" onchange="onEchipaZiChange(this.value)">
+    </div>
+    <table class="task-table" style="margin-bottom:26px;">
+      <thead><tr><th>Angajat</th><th>Titlu</th><th>Departament</th><th>Status</th></tr></thead>
+      <tbody>${dayRows || `<tr><td class="empty-row" colspan="4">Niciun task cu deadline în ziua selectată.</td></tr>`}</tbody>
+    </table>
+
+    <h3 class="display" style="font-size:16px;margin:24px 0 10px;">Istoric pe perioadă</h3>
+    <div class="filters">
+      <input type="date" id="echipaIstoricFrom" value="${dashHistFrom}">
+      <input type="date" id="echipaIstoricTo" value="${dashHistTo}">
+      <button class="btn btn-gold btn-sm" onclick="onEchipaIstoricCheck()">Verifică</button>
+    </div>
+    ${istoricBlock}
+  `;
+}
+
 function renderDashboard(){
   const mine = myTasksList();
   const azi = mine.filter(t => t.Deadline && String(t.Deadline).slice(0,10) === todayStr());
@@ -368,6 +447,7 @@ function renderDashboard(){
       <div class="stat-card gold"><div class="num">${asteapta.length}</div><div class="lbl">în așteptare verificare</div></div>
       ${managerCards}
     </div>
+    ${isManager() ? renderEchipaActivitate() : ''}
     <h3 class="display" style="font-size:16px;margin-bottom:10px;">Săptămâna aceasta</h3>
     ${renderWeekBoard(mine)}
     <h3 class="display" style="font-size:16px;margin-bottom:10px;">Taskurile mele active</h3>
@@ -678,7 +758,8 @@ async function submitTask(){
     Prioritate: document.getElementById('f_prio').value,
     OraLimita: document.getElementById('f_ora').value,
     Instructiuni: document.getElementById('f_instr').value.trim(),
-    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim()
+    RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
+    NecesitaAprobare: document.getElementById('f_aprobare').checked
   };
 
   await withLock(async () => {
@@ -906,6 +987,7 @@ function modalSablon(){
       </div>
       <div class="field"><label>Instrucțiuni</label><textarea id="f_instr"></textarea></div>
       <div class="field"><label>Rezultat așteptat</label><input id="f_rezasteptat"></div>
+      <div class="checkbox-row" style="margin-bottom:14px;"><input type="checkbox" id="f_aprobare_sablon"> <label for="f_aprobare_sablon" style="margin:0;font-weight:400;">Necesită aprobarea managerului la finalizare</label></div>
       <div class="modal-actions">
         <button class="btn btn-ghost" onclick="closeModal()">Anulează</button>
         <button class="btn btn-primary" onclick="submitSablon()">Salvează șablon</button>
@@ -949,6 +1031,7 @@ async function submitSablon(){
     ZileAvans: document.getElementById('f_zileavans').value,
     Instructiuni: document.getElementById('f_instr').value.trim(),
     RezultatAsteptat: document.getElementById('f_rezasteptat').value.trim(),
+    NecesitaAprobare: document.getElementById('f_aprobare_sablon').checked,
     Activ: true
   };
   await withLock(async () => {
