@@ -1053,6 +1053,7 @@ function modalAngajat(editId){
     <div class="modal">
       <h3 class="display">${a ? 'Editează angajat' : 'Angajat nou'}</h3>
       <div class="field"><label>Nume</label><input id="f_nume" placeholder="Nume complet" value="${a?escapeHtml(a.Nume):''}"></div>
+      <div class="field"><label>Email (pentru notificări și rezumate automate)</label><input id="f_email" type="email" placeholder="nume@fermacuomenie.ro" value="${a?escapeHtml(a.Email||''):''}"></div>
       <div class="field-row">
         <div class="field"><label>Departament</label><select id="f_dep">${deps.map(d=>`<option ${a&&a.Departament===d?'selected':''}>${d}</option>`).join('')}</select></div>
         <div class="field"><label>Rol</label><select id="f_rol"><option ${a&&a.Rol==='Angajat'?'selected':''}>Angajat</option><option ${a&&a.Rol==='Manager'?'selected':''}>Manager</option><option ${a&&a.Rol==='GM'?'selected':''}>GM</option></select></div>
@@ -1082,6 +1083,7 @@ async function submitAngajat(editId){
   const acceseExtra = Array.from(document.querySelectorAll('.checkbox-grid input:checked')).map(c => c.value).join(',');
   const payload = {
     Nume: nume,
+    Email: document.getElementById('f_email').value.trim(),
     Departament: document.getElementById('f_dep').value,
     Rol: document.getElementById('f_rol').value,
     Manager: document.getElementById('f_manager').value,
