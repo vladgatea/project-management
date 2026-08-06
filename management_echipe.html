@@ -374,6 +374,7 @@ function renderEchipaActivitate(){
       <td class="t-title">${escapeHtml(t.Titlu)}</td>
       <td>${escapeHtml(t.Departament||'')}</td>
       <td><span class="status-pill" style="background:${c.bg};color:${c.fg};">${escapeHtml(t.Status||'')}</span></td>
+      <td style="font-size:11.5px;max-width:220px;">${resultPreview(t)}</td>
     </tr>`;
   }).join('');
 
@@ -390,6 +391,7 @@ function renderEchipaActivitate(){
         <td>${escapeHtml(t.AngajatNume||'—')}</td>
         <td class="t-title">${escapeHtml(t.Titlu)}</td>
         <td><span class="status-pill" style="background:${c.bg};color:${c.fg};">${escapeHtml(t.Status||'')}</span></td>
+        <td style="font-size:11.5px;max-width:220px;">${resultPreview(t)}</td>
       </tr>`;
     }).join('');
     istoricBlock = `
@@ -399,8 +401,8 @@ function renderEchipaActivitate(){
         <div class="stat-card gold"><div class="num">${pct}%</div><div class="lbl">grad de realizare</div></div>
       </div>
       <table class="task-table">
-        <thead><tr><th>Deadline</th><th>Angajat</th><th>Titlu</th><th>Status</th></tr></thead>
-        <tbody>${rows || `<tr><td class="empty-row" colspan="4">Niciun task în perioada aleasă.</td></tr>`}</tbody>
+        <thead><tr><th>Deadline</th><th>Angajat</th><th>Titlu</th><th>Status</th><th>Rezultat</th></tr></thead>
+        <tbody>${rows || `<tr><td class="empty-row" colspan="5">Niciun task în perioada aleasă.</td></tr>`}</tbody>
       </table>`;
   }
 
@@ -410,8 +412,8 @@ function renderEchipaActivitate(){
       <input type="date" id="echipaZi" value="${dashDayDate}" onchange="onEchipaZiChange(this.value)">
     </div>
     <table class="task-table" style="margin-bottom:26px;">
-      <thead><tr><th>Angajat</th><th>Titlu</th><th>Departament</th><th>Status</th></tr></thead>
-      <tbody>${dayRows || `<tr><td class="empty-row" colspan="4">Niciun task cu deadline în ziua selectată.</td></tr>`}</tbody>
+      <thead><tr><th>Angajat</th><th>Titlu</th><th>Departament</th><th>Status</th><th>Rezultat</th></tr></thead>
+      <tbody>${dayRows || `<tr><td class="empty-row" colspan="5">Niciun task cu deadline în ziua selectată.</td></tr>`}</tbody>
     </table>
 
     <h3 class="display" style="font-size:16px;margin:24px 0 10px;">Istoric pe perioadă</h3>
@@ -513,6 +515,14 @@ function applyFilters(){
   document.getElementById('allTasksTable').innerHTML = taskTable(list, false);
 }
 
+function resultPreview(t){
+  const txt = (t.Rezultat || t.Probleme || '').trim();
+  const emStatus = ['Trimis spre verificare','Aprobat','Respins'].includes(t.Status);
+  if(!txt) return emStatus ? `<span style="color:var(--late);font-style:italic;">necompletat</span>` : '<span style="color:var(--ink-soft);">—</span>';
+  const short = txt.length > 60 ? txt.slice(0,60) + '…' : txt;
+  return `<span title="${escapeHtml(txt)}">${escapeHtml(short)}</span>`;
+}
+
 function taskTable(tasks, mine){
   const sorted = [...tasks].sort((a,b) => (a.Deadline||'').localeCompare(b.Deadline||''));
   const rows = sorted.map(t => `
@@ -523,13 +533,14 @@ function taskTable(tasks, mine){
       <td class="${t.Prioritate==='Urgenta'?'prio-Urgenta':t.Prioritate==='Ridicata'?'prio-Ridicata':''}">${escapeHtml(t.Prioritate||'')}</td>
       <td class="${isOverdue(t)?'t-overdue':''}">${isOverdue(t)?'⚠ ':''}${fmtDate(t.Deadline)}</td>
       <td><span class="status-pill ${statusClass(t.Status)}">${escapeHtml(t.Status||'')}</span></td>
+      <td style="font-size:11.5px;max-width:220px;">${resultPreview(t)}</td>
     </tr>`).join('');
   return `
     <table class="task-table">
       <thead><tr>
-        <th>Titlu</th>${mine?'':'<th>Responsabil</th>'}<th>Departament</th><th>Prioritate</th><th>Deadline</th><th>Status</th>
+        <th>Titlu</th>${mine?'':'<th>Responsabil</th>'}<th>Departament</th><th>Prioritate</th><th>Deadline</th><th>Status</th><th>Rezultat</th>
       </tr></thead>
-      <tbody>${rows || `<tr><td class="empty-row" colspan="6">Niciun task.</td></tr>`}</tbody>
+      <tbody>${rows || `<tr><td class="empty-row" colspan="7">Niciun task.</td></tr>`}</tbody>
     </table>`;
 }
 
@@ -850,8 +861,12 @@ function modalTaskDetail(taskId){
     actions += `<button class="btn btn-gold btn-sm" onclick="setTaskStatus('${t.ID}','Aprobat')">✔ Aprobă</button>`;
     actions += `<button class="btn btn-ghost btn-sm" onclick="setTaskStatus('${t.ID}','Respins')">✕ Respinge</button>`;
   }
+  const areRezultat = !!(t.Rezultat || t.ValoareNumerica || t.Link || t.Procent || t.Probleme || t.DurataEfectiva);
+  if(amIManager && t.Status === 'Aprobat' && !areRezultat){
+    actions += `<button class="btn btn-ghost btn-sm" onclick="solicitaCompletare('${t.ID}')">✎ Solicită completare rezultat</button>`;
+  }
 
-  const rezultatBox = (t.Rezultat || t.ValoareNumerica || t.Link || t.Procent || t.Probleme || t.DurataEfectiva) ? `
+  const rezultatBox = areRezultat ? `
     <div class="result-box">
       <div class="lbl">Rezultat obținut</div>
       ${t.Rezultat ? `<div>${escapeHtml(t.Rezultat)}</div>` : ''}
@@ -877,6 +892,7 @@ function modalTaskDetail(taskId){
       ${t.Descriere ? `<div class="info-box">${escapeHtml(t.Descriere)}</div>` : ''}
       ${t.MotivBlocaj ? `<div class="info-box" style="border:1px solid var(--late);">⛔ Motiv blocaj: ${escapeHtml(t.MotivBlocaj)}</div>` : ''}
       ${rezultatBox}
+      ${(!areRezultat && ['Trimis spre verificare','Aprobat','Respins'].includes(t.Status)) ? `<div class="info-box" style="border:1px solid var(--late);color:var(--late);">⚠ Angajatul nu a completat descrierea rezultatului la finalizare.</div>` : ''}
       <div class="action-row">${actions || '<span style="font-size:12px;color:var(--ink-soft);">Nu ai acțiuni disponibile pe acest task.</span>'}</div>
 
       <div class="field"><label>Comentarii</label></div>
@@ -893,6 +909,20 @@ function modalTaskDetail(taskId){
 function patchTaskLocal(taskId, fields){
   const t = STATE.taskuri.find(x => x.ID === taskId);
   if(t) Object.assign(t, fields);
+}
+
+async function solicitaCompletare(taskId){
+  await withLock(async () => {
+    try{
+      await apiPost('updateTask', { ID: taskId, Status: 'Respins' });
+      await apiPost('addComentariu', { TaskID: taskId, Autor: meNume(), Text: 'Te rog completează descrierea rezultatului obținut — task-ul a fost aprobat fără nicio informație.' });
+      patchTaskLocal(taskId, { Status: 'Respins' });
+      STATE.comentarii.push({ ID: 'local-'+Date.now(), TaskID: taskId, Autor: meNume(), Text: 'Te rog completează descrierea rezultatului obținut — task-ul a fost aprobat fără nicio informație.', DataOra: new Date().toISOString() });
+      showToast('Trimis înapoi pentru completare');
+      renderNav(); render();
+      openModal('taskDetail', taskId);
+    }catch(err){ showToast('Eroare: ' + err.message); }
+  });
 }
 
 async function setTaskStatus(taskId, status){
@@ -927,7 +957,7 @@ function openRezultatForm(taskId){
     <div class="modal">
       <h3 class="display">Finalizare task</h3>
       <p class="sub">${t.RezultatAsteptat ? 'Rezultat așteptat: ' + escapeHtml(t.RezultatAsteptat) : 'Completează ce ai obținut.'}</p>
-      <div class="field"><label>Descrierea rezultatului</label><textarea id="f_rezultat"></textarea></div>
+      <div class="field"><label>Descrierea rezultatului *</label><textarea id="f_rezultat" placeholder="Ce ai obținut concret? Obligatoriu."></textarea></div>
       <div class="field-row">
         <div class="field"><label>Valoare numerică (opțional)</label><input id="f_valoare" type="number" step="any"></div>
         <div class="field"><label>Unitate de măsură</label><input id="f_um" placeholder="ex: buc, kg, RON"></div>
@@ -947,10 +977,12 @@ function openRezultatForm(taskId){
 
 async function submitRezultat(taskId){
   const t = STATE.taskuri.find(x => x.ID === taskId);
+  const rezultatText = document.getElementById('f_rezultat').value.trim();
+  if(!rezultatText){ showToast('Completează descrierea rezultatului — e obligatorie'); return; }
   const nextStatus = (t.NecesitaAprobare === true || t.NecesitaAprobare === 'TRUE') ? 'Trimis spre verificare' : 'Aprobat';
   const payload = {
     ID: taskId,
-    Rezultat: document.getElementById('f_rezultat').value.trim(),
+    Rezultat: rezultatText,
     ValoareNumerica: document.getElementById('f_valoare').value,
     UnitateMasura: document.getElementById('f_um').value.trim(),
     Procent: document.getElementById('f_procent').value,
