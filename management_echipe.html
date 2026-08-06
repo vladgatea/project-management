@@ -234,17 +234,29 @@ async function withLock(fn){
   try{ await fn(); } finally { ACTION_BUSY = false; document.body.classList.remove('busy'); }
 }
 
-async function apiGet(){
-  const res = await fetch(scriptUrl() + '?action=getAll');
-  const json = await res.json();
-  if(!json.ok) throw new Error(json.error || 'Eroare la citire');
-  return json.data;
+// Apps Script "adoarme" cand nu e folosit; prima cerere de dupa o pauza poate pica.
+// Reincercam o singura data, automat si invizibil, inainte sa aratam vreo eroare.
+async function apiGet(_retry){
+  try{
+    const res = await fetch(scriptUrl() + '?action=getAll');
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error || 'Eroare la citire');
+    return json.data;
+  }catch(err){
+    if(!_retry){ await new Promise(r => setTimeout(r, 500)); return apiGet(true); }
+    throw err;
+  }
 }
-async function apiPost(action, payload){
-  const res = await fetch(scriptUrl(), { method:'POST', body: JSON.stringify({ action, payload }) });
-  const json = await res.json();
-  if(!json.ok) throw new Error(json.error || 'Eroare la scriere');
-  return json;
+async function apiPost(action, payload, _retry){
+  try{
+    const res = await fetch(scriptUrl(), { method:'POST', body: JSON.stringify({ action, payload }) });
+    const json = await res.json();
+    if(!json.ok) throw new Error(json.error || 'Eroare la scriere');
+    return json;
+  }catch(err){
+    if(!_retry){ await new Promise(r => setTimeout(r, 500)); return apiPost(action, payload, true); }
+    throw err;
+  }
 }
 
 async function loadAll(){
@@ -834,12 +846,13 @@ function modalTaskDetail(taskId){
     actions += `<button class="btn btn-ghost btn-sm" onclick="setTaskStatus('${t.ID}','Respins')">✕ Respinge</button>`;
   }
 
-  const rezultatBox = (t.Rezultat || t.ValoareNumerica || t.Link) ? `
+  const rezultatBox = (t.Rezultat || t.ValoareNumerica || t.Link || t.Procent || t.Probleme || t.DurataEfectiva) ? `
     <div class="result-box">
       <div class="lbl">Rezultat obținut</div>
       ${t.Rezultat ? `<div>${escapeHtml(t.Rezultat)}</div>` : ''}
       ${t.ValoareNumerica ? `<div>Valoare: <b>${escapeHtml(t.ValoareNumerica)} ${escapeHtml(t.UnitateMasura||'')}</b></div>` : ''}
       ${t.Procent ? `<div>Procent realizat: <b>${escapeHtml(t.Procent)}%</b></div>` : ''}
+      ${t.DurataEfectiva ? `<div>Durata efectivă: <b>${escapeHtml(t.DurataEfectiva)} ore</b></div>` : ''}
       ${t.Link ? `<div>Link: <a href="${escapeHtml(t.Link)}" target="_blank">${escapeHtml(t.Link)}</a></div>` : ''}
       ${t.Probleme ? `<div>Probleme: ${escapeHtml(t.Probleme)}</div>` : ''}
     </div>` : '';
